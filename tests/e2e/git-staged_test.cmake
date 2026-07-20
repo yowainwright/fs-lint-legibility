@@ -1,10 +1,10 @@
+set(ENV{GIT_CONFIG_NOSYSTEM} "1")
+set(ENV{GIT_CONFIG_GLOBAL} "${TEST_ROOT}/gitconfig")
+set(ENV{GIT_TEMPLATE_DIR} "${TEST_ROOT}/git-template")
+
 function(run_git)
   execute_process(
     COMMAND
-      "${CMAKE_COMMAND}" -E env
-      "GIT_CONFIG_NOSYSTEM=1"
-      "GIT_CONFIG_GLOBAL=${TEST_ROOT}/gitconfig"
-      "GIT_TEMPLATE_DIR=${TEST_ROOT}/git-template"
       git
       -c commit.gpgsign=false
       -c "core.hooksPath=${TEST_ROOT}/git-hooks"
