@@ -1,6 +1,14 @@
 function(run_git)
   execute_process(
-    COMMAND git ${ARGN}
+    COMMAND
+      "${CMAKE_COMMAND}" -E env
+      "GIT_CONFIG_NOSYSTEM=1"
+      "GIT_CONFIG_GLOBAL=${TEST_ROOT}/gitconfig"
+      "GIT_TEMPLATE_DIR=${TEST_ROOT}/git-template"
+      git
+      -c commit.gpgsign=false
+      -c "core.hooksPath=${TEST_ROOT}/git-hooks"
+      ${ARGN}
     WORKING_DIRECTORY "${TEST_ROOT}"
     RESULT_VARIABLE status
     OUTPUT_VARIABLE output
@@ -12,7 +20,13 @@ function(run_git)
 endfunction()
 
 file(REMOVE_RECURSE "${TEST_ROOT}")
-file(MAKE_DIRECTORY "${TEST_ROOT}/src")
+file(
+  MAKE_DIRECTORY
+  "${TEST_ROOT}/src"
+  "${TEST_ROOT}/git-hooks"
+  "${TEST_ROOT}/git-template"
+)
+file(WRITE "${TEST_ROOT}/gitconfig" "")
 file(
   WRITE
   "${TEST_ROOT}/.legibilityrc.json"
@@ -20,7 +34,7 @@ file(
 )
 file(WRITE "${TEST_ROOT}/src/existing.c" "int existing(void) { return 1; }\n")
 
-run_git(init -q)
+run_git(-c init.defaultBranch=main init -q)
 run_git(add .)
 run_git(-c user.name=fs-lint -c user.email=fs-lint@example.test commit -qm initial)
 
@@ -70,6 +84,31 @@ endif()
 
 if(NOT base_error STREQUAL "")
   message(FATAL_ERROR "expected empty base stderr: ${base_error}")
+endif()
+
+run_git(branch comparison HEAD~1)
+run_git(checkout -q comparison)
+run_git(rm -q src/existing.c)
+run_git(-c user.name=fs-lint -c user.email=fs-lint@example.test commit -qm deletion)
+run_git(checkout -q main)
+
+execute_process(
+  COMMAND "${FS_LINT}" check --base comparison --root "${TEST_ROOT}"
+  RESULT_VARIABLE diverged_status
+  OUTPUT_VARIABLE diverged_output
+  ERROR_VARIABLE diverged_error
+)
+
+if(NOT diverged_status EQUAL 1)
+  message(FATAL_ERROR "expected diverged-base violation: ${diverged_error}")
+endif()
+
+if(NOT diverged_output STREQUAL expected)
+  message(FATAL_ERROR "unexpected diverged-base output: ${diverged_output}")
+endif()
+
+if(NOT diverged_error STREQUAL "")
+  message(FATAL_ERROR "expected empty diverged-base stderr: ${diverged_error}")
 endif()
 
 run_git(mv src/existing.c src/renamed.c)

@@ -172,9 +172,14 @@ static bool wait_for_git(pid_t identifier, int *status, cli_changes *changes) {
 }
 
 static bool report_git_failure(FILE *error_stream, cli_changes *changes) {
-  rewind(error_stream);
+  if (fseek(error_stream, 0, SEEK_SET) != 0) {
+    return fail(changes, "git diff failed and its error output could not be read");
+  }
   char detail[192];
   size_t length = fread(detail, 1, sizeof(detail) - 1, error_stream);
+  if (ferror(error_stream)) {
+    return fail(changes, "git diff failed and its error output could not be read");
+  }
   while (length > 0 && (detail[length - 1] == '\n' || detail[length - 1] == '\r')) {
     length -= 1;
   }
@@ -231,8 +236,9 @@ bool cli_changes_read_git_staged(const char *root, cli_changes *changes) {
 bool cli_changes_read_git_base(const char *root, const char *base,
                                cli_changes *changes) {
   const char *const arguments[] = {
-      "git",  "diff", "--name-only", "--diff-filter=A", "--no-renames", "-z", base,
-      "HEAD", "--",   NULL,
+      "git",          "diff", "--merge-base", "--name-only", "--diff-filter=A",
+      "--no-renames", "-z",   base,           "HEAD",        "--",
+      NULL,
   };
   return read_git(root, arguments, changes);
 }
