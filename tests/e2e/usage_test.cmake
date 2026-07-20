@@ -11,6 +11,9 @@ string(
   "usage: fs-lint check-path "
   "[--root path] [--config path] "
   "[--format text|json] <path>\n"
+  "usage: fs-lint check (--stdin0|--staged|--base ref) "
+  "[--root path] [--config path] "
+  "[--format text|json]\n"
 )
 
 if(NOT status EQUAL 2)
@@ -23,6 +26,25 @@ endif()
 
 if(NOT error STREQUAL expected_error)
   message(FATAL_ERROR "unexpected stderr: ${error}")
+endif()
+
+execute_process(
+  COMMAND "${FS_LINT}" check --stdin0 --staged
+  RESULT_VARIABLE sources_status
+  OUTPUT_VARIABLE sources_output
+  ERROR_VARIABLE sources_error
+)
+
+if(NOT sources_status EQUAL 2)
+  message(FATAL_ERROR "expected conflicting sources to exit 2")
+endif()
+
+if(NOT sources_output STREQUAL "")
+  message(FATAL_ERROR "expected empty conflicting-source stdout: ${sources_output}")
+endif()
+
+if(NOT sources_error STREQUAL expected_error)
+  message(FATAL_ERROR "unexpected conflicting-source usage: ${sources_error}")
 endif()
 
 file(REMOVE_RECURSE "${TEST_ROOT}")

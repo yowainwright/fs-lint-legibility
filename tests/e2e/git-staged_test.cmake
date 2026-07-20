@@ -1,0 +1,127 @@
+function(run_git)
+  execute_process(
+    COMMAND git ${ARGN}
+    WORKING_DIRECTORY "${TEST_ROOT}"
+    RESULT_VARIABLE status
+    OUTPUT_VARIABLE output
+    ERROR_VARIABLE error
+  )
+  if(NOT status EQUAL 0)
+    message(FATAL_ERROR "git command failed: ${output}${error}")
+  endif()
+endfunction()
+
+file(REMOVE_RECURSE "${TEST_ROOT}")
+file(MAKE_DIRECTORY "${TEST_ROOT}/src")
+file(
+  WRITE
+  "${TEST_ROOT}/.legibilityrc.json"
+  "{\"version\":1,\"newFiles\":{}}"
+)
+file(WRITE "${TEST_ROOT}/src/existing.c" "int existing(void) { return 1; }\n")
+
+run_git(init -q)
+run_git(add .)
+run_git(-c user.name=fs-lint -c user.email=fs-lint@example.test commit -qm initial)
+
+file(WRITE "${TEST_ROOT}/src/new-helper.c" "int helper(void) { return 1; }\n")
+run_git(add src/new-helper.c)
+
+execute_process(
+  COMMAND "${FS_LINT}" check --staged --root "${TEST_ROOT}"
+  RESULT_VARIABLE status
+  OUTPUT_VARIABLE output
+  ERROR_VARIABLE error
+)
+
+set(
+  expected
+  "src/new-helper.c: error files/new: new file is not allowed by configuration\n"
+)
+
+if(NOT status EQUAL 1)
+  message(FATAL_ERROR "expected staged violation exit code 1: ${error}")
+endif()
+
+if(NOT output STREQUAL expected)
+  message(FATAL_ERROR "unexpected staged output: ${output}")
+endif()
+
+if(NOT error STREQUAL "")
+  message(FATAL_ERROR "expected empty staged stderr: ${error}")
+endif()
+
+run_git(-c user.name=fs-lint -c user.email=fs-lint@example.test commit -qm addition)
+
+execute_process(
+  COMMAND "${FS_LINT}" check --base HEAD~1 --root "${TEST_ROOT}"
+  RESULT_VARIABLE base_status
+  OUTPUT_VARIABLE base_output
+  ERROR_VARIABLE base_error
+)
+
+if(NOT base_status EQUAL 1)
+  message(FATAL_ERROR "expected base violation exit code 1: ${base_error}")
+endif()
+
+if(NOT base_output STREQUAL expected)
+  message(FATAL_ERROR "unexpected base output: ${base_output}")
+endif()
+
+if(NOT base_error STREQUAL "")
+  message(FATAL_ERROR "expected empty base stderr: ${base_error}")
+endif()
+
+run_git(mv src/existing.c src/renamed.c)
+
+execute_process(
+  COMMAND "${FS_LINT}" check --staged --root "${TEST_ROOT}"
+  RESULT_VARIABLE rename_status
+  OUTPUT_VARIABLE rename_output
+  ERROR_VARIABLE rename_error
+)
+
+set(
+  expected_rename
+  "src/renamed.c: error files/new: new file is not allowed by configuration\n"
+)
+
+if(NOT rename_status EQUAL 1)
+  message(FATAL_ERROR "expected renamed path violation: ${rename_error}")
+endif()
+
+if(NOT rename_output STREQUAL expected_rename)
+  message(FATAL_ERROR "unexpected renamed path output: ${rename_output}")
+endif()
+
+if(NOT rename_error STREQUAL "")
+  message(FATAL_ERROR "expected empty renamed path stderr: ${rename_error}")
+endif()
+
+set(non_repo "${TEST_ROOT}-not-repo")
+file(REMOVE_RECURSE "${non_repo}")
+file(MAKE_DIRECTORY "${non_repo}")
+file(
+  WRITE
+  "${non_repo}/.legibilityrc.json"
+  "{\"version\":1,\"newFiles\":{}}"
+)
+
+execute_process(
+  COMMAND "${FS_LINT}" check --staged --root "${non_repo}"
+  RESULT_VARIABLE git_error_status
+  OUTPUT_VARIABLE git_error_output
+  ERROR_VARIABLE git_error
+)
+
+if(NOT git_error_status EQUAL 2)
+  message(FATAL_ERROR "expected non-repository exit code 2")
+endif()
+
+if(NOT git_error_output MATCHES "error input/invalid: git diff failed")
+  message(FATAL_ERROR "unexpected non-repository output: ${git_error_output}")
+endif()
+
+if(NOT git_error STREQUAL "")
+  message(FATAL_ERROR "expected empty non-repository stderr: ${git_error}")
+endif()

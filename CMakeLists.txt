@@ -33,6 +33,7 @@ legibility_enable_warnings(legibility)
 
 add_executable(
   fs-lint
+  src/changes.c
   src/cli_output.c
   src/config.c
   src/discover.c
@@ -87,9 +88,11 @@ if(BUILD_TESTING)
 
   add_fs_lint_e2e(discovery)
   add_fs_lint_e2e(explicit-config)
+  add_fs_lint_e2e(git-staged)
   add_fs_lint_e2e(invalid-config)
   add_fs_lint_e2e(json-output)
   add_fs_lint_e2e(policy)
+  add_fs_lint_e2e(stdin0)
   add_fs_lint_e2e(usage)
 
   add_custom_target(

@@ -47,7 +47,15 @@ TOML readers are reserved for later adapters.
 fs-lint check-path src/new-helper.c
 fs-lint check-path --format json src/new-helper.c
 fs-lint check-path --root . --config .legibilityrc.json src/new-helper.c
+fs-lint check --staged
+fs-lint check --base origin/main
+git diff --name-only --diff-filter=A --no-renames -z | fs-lint check --stdin0
 ```
+
+`check` accepts exactly one change source. `--stdin0` treats each NUL-delimited
+path as added, `--staged` checks added paths in the Git index, and `--base`
+checks additions between a Git ref and `HEAD`. Rename destinations are checked
+as additions.
 
 Exit code `0` allows the path, `1` reports policy violations, and `2` reports
 configuration or usage errors.

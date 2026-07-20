@@ -1,3 +1,4 @@
+#include "changes.h"
 #include "cli_output.h"
 #include "config.h"
 #include "legibility.h"
@@ -6,16 +7,25 @@
 #include <stdio.h>
 #include <string.h>
 
+typedef enum { CLI_COMMAND_INVALID, CLI_CHECK_PATH, CLI_CHECK_BATCH } cli_command;
+
 typedef struct {
   const char *root;
   const char *config_path;
   const char *path;
+  const char *base;
   cli_output_format format;
+  cli_command command;
+  bool stdin0;
+  bool staged;
 } cli_arguments;
 
 static int usage(void) {
   fputs("usage: fs-lint check-path [--root path] [--config path] "
         "[--format text|json] <path>\n",
+        stderr);
+  fputs("usage: fs-lint check (--stdin0|--staged|--base ref) [--root path] "
+        "[--config path] [--format text|json]\n",
         stderr);
   return LEGIBILITY_STATUS_ERROR;
 }
@@ -23,10 +33,20 @@ static int usage(void) {
 static void initialize_arguments(cli_arguments *arguments) {
   *arguments = (cli_arguments){
       .root = ".",
-      .config_path = NULL,
-      .path = NULL,
       .format = CLI_OUTPUT_TEXT,
   };
+}
+
+static bool read_command(const char *value, cli_arguments *arguments) {
+  if (strcmp(value, "check-path") == 0) {
+    arguments->command = CLI_CHECK_PATH;
+    return true;
+  }
+  if (strcmp(value, "check") == 0) {
+    arguments->command = CLI_CHECK_BATCH;
+    return true;
+  }
+  return false;
 }
 
 static const char *next_value(int argc, char **argv, size_t *index) {
@@ -39,34 +59,58 @@ static const char *next_value(int argc, char **argv, size_t *index) {
   return value;
 }
 
-static int read_format(int argc, char **argv, size_t *index, cli_arguments *args) {
+static bool read_format(int argc, char **argv, size_t *index,
+                        cli_arguments *arguments) {
   const char *value = next_value(argc, argv, index);
   if (value == NULL) {
-    return 0;
+    return false;
   }
   if (strcmp(value, "json") == 0) {
-    args->format = CLI_OUTPUT_JSON;
-    return 1;
+    arguments->format = CLI_OUTPUT_JSON;
+    return true;
   }
   if (strcmp(value, "text") == 0) {
-    args->format = CLI_OUTPUT_TEXT;
-    return 1;
+    arguments->format = CLI_OUTPUT_TEXT;
+    return true;
   }
-  return 0;
+  return false;
 }
 
-static int read_string_option(int argc, char **argv, size_t *index,
-                              const char **destination) {
+static bool read_string_option(int argc, char **argv, size_t *index,
+                               const char **destination) {
   const char *value = next_value(argc, argv, index);
   if (value == NULL) {
-    return 0;
+    return false;
   }
   *destination = value;
-  return 1;
+  return true;
 }
 
-static int parse_option(int argc, char **argv, size_t *index,
-                        cli_arguments *arguments) {
+static bool read_flag(size_t *index, bool *destination) {
+  if (*destination) {
+    return false;
+  }
+  *destination = true;
+  *index += 1;
+  return true;
+}
+
+static bool read_source_option(int argc, char **argv, const char *option, size_t *index,
+                               cli_arguments *arguments) {
+  if (strcmp(option, "--stdin0") == 0) {
+    return read_flag(index, &arguments->stdin0);
+  }
+  if (strcmp(option, "--staged") == 0) {
+    return read_flag(index, &arguments->staged);
+  }
+  if (strcmp(option, "--base") == 0 && arguments->base == NULL) {
+    return read_string_option(argc, argv, index, &arguments->base);
+  }
+  return false;
+}
+
+static bool parse_option(int argc, char **argv, size_t *index,
+                         cli_arguments *arguments) {
   const char *option = argv[*index];
   if (strcmp(option, "--root") == 0) {
     return read_string_option(argc, argv, index, &arguments->root);
@@ -77,19 +121,20 @@ static int parse_option(int argc, char **argv, size_t *index,
   if (strcmp(option, "--format") == 0) {
     return read_format(argc, argv, index, arguments);
   }
-  return 0;
+  return read_source_option(argc, argv, option, index, arguments);
 }
 
-static int assign_path(const char *path, size_t *index, cli_arguments *arguments) {
+static bool assign_path(const char *path, size_t *index, cli_arguments *arguments) {
   if (arguments->path != NULL) {
-    return 0;
+    return false;
   }
   arguments->path = path;
   *index += 1;
-  return 1;
+  return true;
 }
 
-static int parse_token(int argc, char **argv, size_t *index, cli_arguments *arguments) {
+static bool parse_token(int argc, char **argv, size_t *index,
+                        cli_arguments *arguments) {
   const bool is_option = argv[*index][0] == '-';
   if (is_option) {
     return parse_option(argc, argv, index, arguments);
@@ -97,48 +142,106 @@ static int parse_token(int argc, char **argv, size_t *index, cli_arguments *argu
   return assign_path(argv[*index], index, arguments);
 }
 
-static int parse_arguments(int argc, char **argv, cli_arguments *arguments) {
+static size_t count_sources(const cli_arguments *arguments) {
+  const size_t stdin_count = arguments->stdin0 ? 1U : 0U;
+  const size_t staged_count = arguments->staged ? 1U : 0U;
+  const size_t base_count = arguments->base != NULL ? 1U : 0U;
+  return stdin_count + staged_count + base_count;
+}
+
+static bool valid_base(const cli_arguments *arguments) {
+  const bool absent = arguments->base == NULL;
+  if (absent) {
+    return true;
+  }
+  const bool nonempty = arguments->base[0] != '\0';
+  const bool not_option = arguments->base[0] != '-';
+  return nonempty && not_option;
+}
+
+static bool valid_arguments(const cli_arguments *arguments) {
+  if (arguments->command == CLI_CHECK_PATH) {
+    const bool no_source = count_sources(arguments) == 0;
+    return arguments->path != NULL && no_source;
+  }
+  const bool batch = arguments->command == CLI_CHECK_BATCH;
+  const bool no_path = arguments->path == NULL;
+  const bool one_source = count_sources(arguments) == 1;
+  const bool valid_source = one_source && valid_base(arguments);
+  return batch && no_path && valid_source;
+}
+
+static bool parse_arguments(int argc, char **argv, cli_arguments *arguments) {
   initialize_arguments(arguments);
-  const bool valid_command = argc >= 2 && strcmp(argv[1], "check-path") == 0;
-  if (!valid_command) {
-    return 0;
+  if (argc < 2 || !read_command(argv[1], arguments)) {
+    return false;
   }
   size_t index = 2;
   while (index < (size_t)argc) {
     if (!parse_token(argc, argv, &index, arguments)) {
-      return 0;
+      return false;
     }
   }
-  return arguments->path != NULL;
+  return valid_arguments(arguments);
 }
 
-static void report_config_error(const cli_config *config, cli_output *output) {
+static void report_cli_error(const char *code, const char *path, const char *message,
+                             cli_output *output) {
   const legibility_diagnostic diagnostic = {
       .severity = LEGIBILITY_SEVERITY_ERROR,
-      .code = "config/invalid",
-      .path = config->source_path,
-      .message = config->error,
+      .code = code,
+      .path = path,
+      .message = message,
   };
   cli_report(&diagnostic, output);
 }
 
-static int check_path(const cli_arguments *arguments) {
+static int run_checks(const cli_arguments *arguments, const legibility_change *changes,
+                      size_t change_count) {
   cli_output output = {.format = arguments->format, .stream = stdout};
   cli_config config;
   const bool loaded = cli_config_load(arguments->root, arguments->config_path, &config);
   if (!loaded) {
-    report_config_error(&config, &output);
+    report_cli_error("config/invalid", config.source_path, config.error, &output);
     cli_config_destroy(&config);
     return LEGIBILITY_STATUS_ERROR;
   }
+  const legibility_status status =
+      legibility_check(&config.policy, changes, change_count, cli_report, &output);
+  cli_config_destroy(&config);
+  return (int)status;
+}
+
+static int check_path(const cli_arguments *arguments) {
   const legibility_change change = {
       .path = arguments->path,
       .kind = LEGIBILITY_CHANGE_ADDED,
   };
-  const legibility_status status =
-      legibility_check(&config.policy, &change, 1, cli_report, &output);
-  cli_config_destroy(&config);
-  return (int)status;
+  return run_checks(arguments, &change, 1);
+}
+
+static bool load_batch_changes(const cli_arguments *arguments, cli_changes *changes) {
+  if (arguments->stdin0) {
+    return cli_changes_read_nul(stdin, changes);
+  }
+  if (arguments->staged) {
+    return cli_changes_read_git_staged(arguments->root, changes);
+  }
+  return cli_changes_read_git_base(arguments->root, arguments->base, changes);
+}
+
+static int check_batch(const cli_arguments *arguments) {
+  cli_changes changes;
+  const bool loaded = load_batch_changes(arguments, &changes);
+  if (!loaded) {
+    cli_output output = {.format = arguments->format, .stream = stdout};
+    report_cli_error("input/invalid", "", changes.error, &output);
+    cli_changes_destroy(&changes);
+    return LEGIBILITY_STATUS_ERROR;
+  }
+  const int status = run_checks(arguments, changes.items, changes.count);
+  cli_changes_destroy(&changes);
+  return status;
 }
 
 int main(int argc, char **argv) {
@@ -146,5 +249,8 @@ int main(int argc, char **argv) {
   if (!parse_arguments(argc, argv, &arguments)) {
     return usage();
   }
-  return check_path(&arguments);
+  if (arguments.command == CLI_CHECK_PATH) {
+    return check_path(&arguments);
+  }
+  return check_batch(&arguments);
 }

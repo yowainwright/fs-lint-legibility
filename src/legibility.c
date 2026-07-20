@@ -5,15 +5,15 @@
 #include <stdbool.h>
 #include <string.h>
 
-static void report_invalid_input(const char *message, legibility_reporter reporter,
-                                 void *user_data) {
+static void report_error(const char *code, const char *path, const char *message,
+                         legibility_reporter reporter, void *user_data) {
   if (reporter == NULL) {
     return;
   }
   const legibility_diagnostic diagnostic = {
       .severity = LEGIBILITY_SEVERITY_ERROR,
-      .code = "input/invalid",
-      .path = "",
+      .code = code,
+      .path = path,
       .message = message,
   };
   reporter(&diagnostic, user_data);
@@ -80,43 +80,63 @@ static const char *validate_input(const legibility_config *config,
   return validate_changes(changes, change_count);
 }
 
-static void report_new_file(const char *path, legibility_reporter reporter,
-                            void *user_data) {
-  if (reporter == NULL) {
-    return;
+static size_t find_max_path_length(const legibility_change *changes,
+                                   size_t change_count) {
+  size_t maximum = 0;
+  for (size_t index = 0; index < change_count; index += 1) {
+    const size_t length = strlen(changes[index].path);
+    maximum = length > maximum ? length : maximum;
   }
-  const legibility_diagnostic diagnostic = {
-      .severity = LEGIBILITY_SEVERITY_ERROR,
-      .code = "files/new",
-      .path = path,
-      .message = "new file is not allowed by configuration",
-  };
-  reporter(&diagnostic, user_data);
+  return maximum;
 }
 
-static bool is_allowed(const legibility_config *config, const char *path) {
-  for (size_t index = 0; index < config->allow_pattern_count; index += 1) {
-    if (legibility_glob_matches(config->allow_patterns[index], path)) {
-      return true;
-    }
+static legibility_glob_matcher *create_matcher(const legibility_config *config,
+                                               const legibility_change *changes,
+                                               size_t change_count) {
+  if (config->allow_pattern_count == 0) {
+    return NULL;
   }
-  return false;
+  const size_t max_path_length = find_max_path_length(changes, change_count);
+  return legibility_glob_matcher_create(config->allow_patterns,
+                                        config->allow_pattern_count, max_path_length);
 }
 
-static bool check_changes(const legibility_config *config,
+static bool check_changes(legibility_glob_matcher *matcher,
                           const legibility_change *changes, size_t change_count,
                           legibility_reporter reporter, void *user_data) {
   bool found_violation = false;
   for (size_t index = 0; index < change_count; index += 1) {
     const bool added = changes[index].kind == LEGIBILITY_CHANGE_ADDED;
-    const bool allowed = added && is_allowed(config, changes[index].path);
-    if (!added || allowed) {
+    if (!added) {
       continue;
     }
-    report_new_file(changes[index].path, reporter, user_data);
+    const bool allowed = matcher != NULL &&
+                         legibility_glob_matcher_matches(matcher, changes[index].path);
+    if (allowed) {
+      continue;
+    }
+    report_error("files/new", changes[index].path,
+                 "new file is not allowed by configuration", reporter, user_data);
     found_violation = true;
   }
   return found_violation;
+}
+
+static legibility_status check_denied_additions(const legibility_config *config,
+                                                const legibility_change *changes,
+                                                size_t change_count,
+                                                legibility_reporter reporter,
+                                                void *user_data) {
+  legibility_glob_matcher *matcher = create_matcher(config, changes, change_count);
+  const bool allocation_failed = config->allow_pattern_count > 0 && matcher == NULL;
+  if (allocation_failed) {
+    report_error("runtime/allocation", "", "could not allocate glob matcher", reporter,
+                 user_data);
+    return LEGIBILITY_STATUS_ERROR;
+  }
+  const bool found = check_changes(matcher, changes, change_count, reporter, user_data);
+  legibility_glob_matcher_destroy(matcher);
+  return found ? LEGIBILITY_STATUS_VIOLATIONS : LEGIBILITY_STATUS_OK;
 }
 
 legibility_status legibility_check(const legibility_config *config,
@@ -125,12 +145,13 @@ legibility_status legibility_check(const legibility_config *config,
                                    void *user_data) {
   const char *input_error = validate_input(config, changes, change_count);
   if (input_error != NULL) {
-    report_invalid_input(input_error, reporter, user_data);
+    report_error("input/invalid", "", input_error, reporter, user_data);
     return LEGIBILITY_STATUS_ERROR;
   }
-  const bool denies_additions = config->new_files_default == LEGIBILITY_NEW_FILES_DENY;
-  const bool found_violation =
-      denies_additions &&
-      check_changes(config, changes, change_count, reporter, user_data);
-  return found_violation ? LEGIBILITY_STATUS_VIOLATIONS : LEGIBILITY_STATUS_OK;
+  const bool permits_additions =
+      config->new_files_default == LEGIBILITY_NEW_FILES_ALLOW;
+  if (permits_additions || change_count == 0) {
+    return LEGIBILITY_STATUS_OK;
+  }
+  return check_denied_additions(config, changes, change_count, reporter, user_data);
 }

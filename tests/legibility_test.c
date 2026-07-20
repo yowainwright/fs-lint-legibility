@@ -70,6 +70,32 @@ static void test_allows_established_pattern(void) {
   }
 }
 
+static void test_allows_globstar_without_directory(void) {
+  const char *allow_patterns[] = {"src/**/index.c"};
+  const legibility_config config = {
+      .allow_patterns = allow_patterns,
+      .allow_pattern_count = 1,
+  };
+  captured_diagnostics captured = {0};
+  const legibility_status status = check(&config, "src/index.c", &captured);
+  if (status != LEGIBILITY_STATUS_OK || captured.count != 0) {
+    fail("expected globstar directory to match zero directories");
+  }
+}
+
+static void test_star_does_not_cross_directory(void) {
+  const char *allow_patterns[] = {"src/*.c"};
+  const legibility_config config = {
+      .allow_patterns = allow_patterns,
+      .allow_pattern_count = 1,
+  };
+  captured_diagnostics captured = {0};
+  const legibility_status status = check(&config, "src/nested/file.c", &captured);
+  if (status != LEGIBILITY_STATUS_VIOLATIONS || captured.count != 1) {
+    fail("expected star to stay within one path segment");
+  }
+}
+
 static void test_rejects_missing_config(void) {
   captured_diagnostics captured = {0};
   const legibility_status status = legibility_check(NULL, NULL, 0, capture, &captured);
@@ -196,10 +222,28 @@ static void test_rejects_oversized_pattern(void) {
   }
 }
 
+static void test_allows_maximum_path_with_globstar(void) {
+  char path[LEGIBILITY_MAX_PATH_LENGTH + 1];
+  memset(path, 'a', sizeof(path) - 1);
+  path[sizeof(path) - 1] = '\0';
+  const char *allow_patterns[] = {"**"};
+  const legibility_config config = {
+      .allow_patterns = allow_patterns,
+      .allow_pattern_count = 1,
+  };
+  captured_diagnostics captured = {0};
+  const legibility_status status = check(&config, path, &captured);
+  if (status != LEGIBILITY_STATUS_OK || captured.count != 0) {
+    fail("expected globstar to allow a maximum-length path");
+  }
+}
+
 int main(void) {
   test_denies_added_file();
   test_defaults_to_deny();
   test_allows_established_pattern();
+  test_allows_globstar_without_directory();
+  test_star_does_not_cross_directory();
   test_rejects_missing_config();
   test_rejects_missing_changes();
   test_rejects_missing_path();
@@ -209,5 +253,6 @@ int main(void) {
   test_rejects_invalid_change_kind();
   test_rejects_oversized_path();
   test_rejects_oversized_pattern();
+  test_allows_maximum_path_with_globstar();
   return EXIT_SUCCESS;
 }
