@@ -69,44 +69,33 @@ if(BUILD_TESTING)
   target_link_libraries(cli-output-test PRIVATE legibility)
   legibility_enable_warnings(cli-output-test)
   add_test(NAME cli-output COMMAND cli-output-test)
-  add_test(
-    NAME cli-deny-new-file
-    COMMAND
-      ${CMAKE_COMMAND}
-      -DFS_LINT=$<TARGET_FILE:fs-lint>
-      -DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/test-data/cli-deny
-      -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/cli_deny_test.cmake
-  )
-  add_test(
-    NAME cli-discovers-parent-config
-    COMMAND
-      ${CMAKE_COMMAND}
-      -DFS_LINT=$<TARGET_FILE:fs-lint>
-      -DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/test-data/cli-discovery
-      -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/cli_discovery_test.cmake
-  )
-  add_test(
-    NAME cli-json-diagnostic
-    COMMAND
-      ${CMAKE_COMMAND}
-      -DFS_LINT=$<TARGET_FILE:fs-lint>
-      -DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/test-data/cli-json
-      -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/cli_json_test.cmake
-  )
-  add_test(
-    NAME cli-rejects-invalid-config-keys
-    COMMAND
-      ${CMAKE_COMMAND}
-      -DFS_LINT=$<TARGET_FILE:fs-lint>
-      -DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/test-data/cli-unknown-key
-      -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/cli_invalid_keys_test.cmake
-  )
-  add_test(
-    NAME cli-explicit-config
-    COMMAND
-      ${CMAKE_COMMAND}
-      -DFS_LINT=$<TARGET_FILE:fs-lint>
-      -DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/test-data/cli-explicit
-      -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/cli_explicit_config_test.cmake
+
+  function(add_fs_lint_e2e name)
+    set(test_name e2e-${name})
+    set(test_root ${CMAKE_CURRENT_BINARY_DIR}/test-data/e2e/${name})
+    set(test_script ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e/${name}_test.cmake)
+    add_test(
+      NAME ${test_name}
+      COMMAND
+        ${CMAKE_COMMAND}
+        -DFS_LINT=$<TARGET_FILE:fs-lint>
+        -DTEST_ROOT=${test_root}
+        -P ${test_script}
+    )
+    set_tests_properties(${test_name} PROPERTIES LABELS "e2e;binary")
+  endfunction()
+
+  add_fs_lint_e2e(discovery)
+  add_fs_lint_e2e(explicit-config)
+  add_fs_lint_e2e(invalid-config)
+  add_fs_lint_e2e(json-output)
+  add_fs_lint_e2e(policy)
+  add_fs_lint_e2e(usage)
+
+  add_custom_target(
+    e2e
+    COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure -L e2e
+    DEPENDS fs-lint
+    USES_TERMINAL
   )
 endif()

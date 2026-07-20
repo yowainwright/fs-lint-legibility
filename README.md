@@ -14,6 +14,7 @@ allowing established path patterns.
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel
 ctest --test-dir build --output-on-failure
+cmake --build build --target e2e
 ```
 
 ## Configuration

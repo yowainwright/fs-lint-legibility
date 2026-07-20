@@ -43,3 +43,28 @@ execute_process(
 if(NOT allow_status EQUAL 0 OR NOT allow_output STREQUAL "")
   message(FATAL_ERROR "expected explicit allow to exit cleanly: ${allow_output}")
 endif()
+
+string(
+  CONCAT
+  pattern_config
+  "{\"version\":1,"
+  "\"newFiles\":{\"default\":\"deny\","
+  "\"allow\":[\"src/**/index.c\"]}}"
+)
+file(WRITE "${TEST_ROOT}/.legibilityrc.json" "${pattern_config}")
+
+execute_process(
+  COMMAND "${FS_LINT}" check-path src/widget/index.c
+  WORKING_DIRECTORY "${TEST_ROOT}"
+  RESULT_VARIABLE pattern_status
+  OUTPUT_VARIABLE pattern_output
+  ERROR_VARIABLE pattern_error
+)
+
+if(NOT pattern_status EQUAL 0)
+  message(FATAL_ERROR "expected allow pattern to exit 0: ${pattern_error}")
+endif()
+
+if(NOT pattern_output STREQUAL "" OR NOT pattern_error STREQUAL "")
+  message(FATAL_ERROR "expected allow pattern to produce no output")
+endif()
