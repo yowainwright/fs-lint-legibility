@@ -26,3 +26,20 @@ endif()
 if(NOT output STREQUAL expected)
   message(FATAL_ERROR "unexpected output: ${output}")
 endif()
+
+file(
+  WRITE
+  "${TEST_ROOT}/.legibilityrc.json"
+  "{\"version\":1,\"newFiles\":{\"default\":\"allow\"}}"
+)
+
+execute_process(
+  COMMAND "${FS_LINT}" check-path src/new-helper.c
+  WORKING_DIRECTORY "${TEST_ROOT}"
+  RESULT_VARIABLE allow_status
+  OUTPUT_VARIABLE allow_output
+)
+
+if(NOT allow_status EQUAL 0 OR NOT allow_output STREQUAL "")
+  message(FATAL_ERROR "expected explicit allow to exit cleanly: ${allow_output}")
+endif()

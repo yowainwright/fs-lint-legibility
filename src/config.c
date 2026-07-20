@@ -144,6 +144,7 @@ static bool read_default(yyjson_val *new_files, cli_config *config) {
     return true;
   }
   if (strcmp(setting, "allow") == 0) {
+    config->policy.new_files_default = LEGIBILITY_NEW_FILES_ALLOW;
     return true;
   }
   return fail(config, "newFiles.default must be \"allow\" or \"deny\"");
