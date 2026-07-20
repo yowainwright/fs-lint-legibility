@@ -1,0 +1,118 @@
+#include "legibility.h"
+
+#include "glob.h"
+
+#include <stdbool.h>
+
+static void report_invalid_input(const char *message, legibility_reporter reporter,
+                                 void *user_data) {
+  if (reporter == NULL) {
+    return;
+  }
+  const legibility_diagnostic diagnostic = {
+      .severity = LEGIBILITY_SEVERITY_ERROR,
+      .code = "input/invalid",
+      .path = "",
+      .message = message,
+  };
+  reporter(&diagnostic, user_data);
+}
+
+static const char *validate_changes(const legibility_change *changes,
+                                    size_t change_count) {
+  for (size_t index = 0; index < change_count; index += 1) {
+    if (changes[index].path == NULL) {
+      return "every change requires a path";
+    }
+  }
+  return NULL;
+}
+
+static const char *validate_patterns(const legibility_config *config) {
+  for (size_t index = 0; index < config->allow_pattern_count; index += 1) {
+    if (config->allow_patterns[index] == NULL) {
+      return "every allow pattern requires a value";
+    }
+  }
+  return NULL;
+}
+
+static const char *validate_config(const legibility_config *config) {
+  if (config == NULL) {
+    return "configuration is required";
+  }
+  const bool missing_patterns =
+      config->allow_pattern_count > 0 && config->allow_patterns == NULL;
+  if (missing_patterns) {
+    return "allow_patterns is required when allow_pattern_count is non-zero";
+  }
+  return validate_patterns(config);
+}
+
+static const char *validate_input(const legibility_config *config,
+                                  const legibility_change *changes,
+                                  size_t change_count) {
+  const char *config_error = validate_config(config);
+  if (config_error != NULL) {
+    return config_error;
+  }
+  if (change_count > 0 && changes == NULL) {
+    return "changes are required when change_count is non-zero";
+  }
+  return validate_changes(changes, change_count);
+}
+
+static void report_new_file(const char *path, legibility_reporter reporter,
+                            void *user_data) {
+  if (reporter == NULL) {
+    return;
+  }
+  const legibility_diagnostic diagnostic = {
+      .severity = LEGIBILITY_SEVERITY_ERROR,
+      .code = "files/new",
+      .path = path,
+      .message = "new file is not allowed by configuration",
+  };
+  reporter(&diagnostic, user_data);
+}
+
+static bool is_allowed(const legibility_config *config, const char *path) {
+  for (size_t index = 0; index < config->allow_pattern_count; index += 1) {
+    if (legibility_glob_matches(config->allow_patterns[index], path)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+static bool check_changes(const legibility_config *config,
+                          const legibility_change *changes, size_t change_count,
+                          legibility_reporter reporter, void *user_data) {
+  bool found_violation = false;
+  for (size_t index = 0; index < change_count; index += 1) {
+    const bool added = changes[index].kind == LEGIBILITY_CHANGE_ADDED;
+    const bool allowed = added && is_allowed(config, changes[index].path);
+    if (!added || allowed) {
+      continue;
+    }
+    report_new_file(changes[index].path, reporter, user_data);
+    found_violation = true;
+  }
+  return found_violation;
+}
+
+legibility_status legibility_check(const legibility_config *config,
+                                   const legibility_change *changes,
+                                   size_t change_count, legibility_reporter reporter,
+                                   void *user_data) {
+  const char *input_error = validate_input(config, changes, change_count);
+  if (input_error != NULL) {
+    report_invalid_input(input_error, reporter, user_data);
+    return LEGIBILITY_STATUS_ERROR;
+  }
+  const bool denies_additions = config->new_files_default == LEGIBILITY_NEW_FILES_DENY;
+  const bool found_violation =
+      denies_additions &&
+      check_changes(config, changes, change_count, reporter, user_data);
+  return found_violation ? LEGIBILITY_STATUS_VIOLATIONS : LEGIBILITY_STATUS_OK;
+}
