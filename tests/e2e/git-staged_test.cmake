@@ -33,10 +33,32 @@ file(
   "{\"version\":1,\"newFiles\":{}}"
 )
 file(WRITE "${TEST_ROOT}/src/existing.c" "int existing(void) { return 1; }\n")
+file(WRITE "${TEST_ROOT}/src/removable.c" "int removable(void) { return 1; }\n")
 
 run_git(-c init.defaultBranch=main init -q)
 run_git(add .)
 run_git(-c user.name=fs-lint -c user.email=fs-lint@example.test commit -qm initial)
+
+file(WRITE "${TEST_ROOT}/src/existing.c" "int existing(void) { return 2; }\n")
+run_git(add src/existing.c)
+run_git(rm -q src/removable.c)
+
+execute_process(
+  COMMAND "${FS_LINT}" check --staged --root "${TEST_ROOT}"
+  RESULT_VARIABLE unchanged_status
+  OUTPUT_VARIABLE unchanged_output
+  ERROR_VARIABLE unchanged_error
+)
+
+if(NOT unchanged_status EQUAL 0)
+  message(FATAL_ERROR "expected modified and deleted paths to pass: ${unchanged_error}")
+endif()
+
+if(NOT unchanged_output STREQUAL "" OR NOT unchanged_error STREQUAL "")
+  message(FATAL_ERROR "expected no diagnostic for modified and deleted paths")
+endif()
+
+run_git(-c user.name=fs-lint -c user.email=fs-lint@example.test commit -qam maintenance)
 
 file(WRITE "${TEST_ROOT}/src/new-helper.c" "int helper(void) { return 1; }\n")
 run_git(add src/new-helper.c)

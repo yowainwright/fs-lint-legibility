@@ -92,6 +92,7 @@ if(BUILD_TESTING)
   add_fs_lint_e2e(invalid-config)
   add_fs_lint_e2e(json-output)
   add_fs_lint_e2e(policy)
+  add_fs_lint_e2e(readme-rules)
   add_fs_lint_e2e(stdin0)
   add_fs_lint_e2e(usage)
 

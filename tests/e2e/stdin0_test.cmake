@@ -9,7 +9,7 @@ file(
 string(
   CONCAT
   command
-  "printf 'src/one.c\\000src/two.c\\000' | "
+  "printf 'src/new helper.c\\000tests/new-helper.test.c\\000' | "
   "\"$1\" check --stdin0 --root \"$2\""
 )
 
@@ -23,8 +23,8 @@ execute_process(
 string(
   CONCAT
   expected
-  "src/one.c: error files/new: new file is not allowed by configuration\n"
-  "src/two.c: error files/new: new file is not allowed by configuration\n"
+  "src/new helper.c: error files/new: new file is not allowed by configuration\n"
+  "tests/new-helper.test.c: error files/new: new file is not allowed by configuration\n"
 )
 
 if(NOT status EQUAL 1)

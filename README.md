@@ -1,7 +1,17 @@
 # fs-lint
 
+<!-- project language and license matching CMakeLists.txt and LICENSE -->
+
+[![C17](https://img.shields.io/badge/C-17-00599C?logo=c&logoColor=white)](./CMakeLists.txt)
+[![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#language-support)
+
+Most filename linters start by asking what a file should be called. `fs-lint`
+starts one step earlier: does this change need another file at all?
+
 `fs-lint` pushes back on unnecessary files and bespoke filenames. It provides a
-dependency-free C17 policy library and a small command-line adapter.
+dependency-free C17 policy library and a small command-line adapter that can be
+used from Git hooks, CI, editors, and coding agents.
 
 This is an early preview. The first policy denies new files by default while
 allowing established path patterns.
@@ -21,7 +31,17 @@ cmake --build build --target e2e
 
 <!-- configuration filenames and schema supported by src/discover.c and src/config.c -->
 
-Strict JSON is supported in `.legibilityrc` and `.legibilityrc.json`:
+Strict JSON is supported in `.legibilityrc` and `.legibilityrc.json`. The
+smallest configuration denies every added path:
+
+```json
+{
+  "version": 1,
+  "newFiles": {}
+}
+```
+
+Allow recurring file families explicitly:
 
 ```json
 {
@@ -38,6 +58,33 @@ Strict JSON is supported in `.legibilityrc` and `.legibilityrc.json`:
 Configuration discovery starts at the lint root and stops at the repository
 root. Multiple configuration files in one directory are an error. YAML and
 TOML readers are reserved for later adapters.
+
+## Rules
+
+<!--
+new-file and glob behavior matching src/legibility.c, src/glob.c,
+and tests/e2e/readme-rules_test.cmake
+-->
+
+The current policy evaluates added paths as follows:
+
+1. `newFiles.default: "allow"` permits every added path.
+2. `newFiles.default: "deny"`, or an omitted default, permits a path only when
+   one of the `newFiles.allow` patterns matches it.
+3. Every other added path produces a `files/new` error.
+4. Modified and deleted paths do not produce new-file violations.
+
+Patterns match the complete path. Their supported syntax is deliberately
+small:
+
+| Pattern | Meaning | Example match |
+| --- | --- | --- |
+| `?` | One non-separator character | `src/?.c` matches `src/a.c` |
+| `*` | Zero or more characters within one path segment | `src/*.c` matches `src/main.c` |
+| `**` | Zero or more characters across path segments | `docs/**` matches `docs/api/http.md` |
+| `**/` | Zero or more complete directories | `src/**/index.c` matches `src/index.c` and `src/ui/index.c` |
+
+Forward and backward slashes are treated as path separators.
 
 ## CLI
 
@@ -59,6 +106,43 @@ destinations are checked as additions.
 
 Exit code `0` allows the path, `1` reports policy violations, and `2` reports
 configuration or usage errors.
+
+## Examples
+
+<!-- binary workflows matching src/main.c and tests/e2e -->
+
+Check added files about to be committed:
+
+```sh
+fs-lint check --staged
+```
+
+Check added paths introduced by the current branch since it diverged from the
+base branch:
+
+```sh
+fs-lint check --base origin/main
+```
+
+Check a path before an editor or coding agent creates it:
+
+```sh
+fs-lint check-path src/new-helper.c
+```
+
+Pass additions from another tool without breaking on spaces or newlines in
+filenames:
+
+```sh
+printf '%s\0' 'src/new helper.c' 'tests/new-helper.test.c' |
+  fs-lint check --stdin0
+```
+
+A denied path produces a diagnostic suitable for humans or automation:
+
+```text
+src/new-helper.c: error files/new: new file is not allowed by configuration
+```
 
 ## Library
 
@@ -87,3 +171,30 @@ legibility_status status = legibility_check(
 
 Configuration parsing, Git integration, and agent hooks remain outside the
 core library.
+
+## Language support
+
+<!--
+language-neutral core boundaries matching CMakeLists.txt, library dependencies,
+and tests/e2e/readme-rules_test.cmake
+-->
+
+The policy works on paths rather than source syntax, so the current binary can
+lint C, C++, Rust, Go, JavaScript, Python, and mixed-language repositories
+without embedding those language runtimes.
+
+Pull requests are welcome for language-specific presets and thin, optional
+adapters: package-manager integrations, bindings, editor or agent hooks, and
+readers for YAML or TOML. QuickJS, mquickjs, and txiki.js integrations are
+also welcome when they remain outside `liblegibility`.
+
+Language-support pull requests should:
+
+- keep the policy core dependency-free C17;
+- lower configuration into the same plain policy data without executing
+  configuration code;
+- keep runtimes, Git, and filesystem access in adapters;
+- include binary end-to-end coverage and document release-size impact.
+
+[Open a pull request](https://github.com/yowainwright/fs-lint-legibility/pulls)
+with one focused integration and a runnable example.
