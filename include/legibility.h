@@ -3,6 +3,9 @@
 
 #include <stddef.h>
 
+#define LEGIBILITY_MAX_PATH_LENGTH 4096
+#define LEGIBILITY_MAX_PATTERN_LENGTH 4096
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -30,8 +33,8 @@ typedef struct {
 } legibility_change;
 
 typedef enum {
-  LEGIBILITY_NEW_FILES_ALLOW,
-  LEGIBILITY_NEW_FILES_DENY
+  LEGIBILITY_NEW_FILES_DENY,
+  LEGIBILITY_NEW_FILES_ALLOW
 } legibility_new_files_default;
 
 typedef struct {

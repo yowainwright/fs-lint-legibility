@@ -1,5 +1,7 @@
 #include "cli_output.h"
 
+static const char *safe_string(const char *value) { return value == NULL ? "" : value; }
+
 static const char *severity_name(legibility_severity severity) {
   return severity == LEGIBILITY_SEVERITY_WARNING ? "warning" : "error";
 }
@@ -45,6 +47,7 @@ static void write_json_character(FILE *stream, unsigned char value) {
 }
 
 static void write_json_string(FILE *stream, const char *value) {
+  value = safe_string(value);
   fputc('"', stream);
   while (*value != '\0') {
     write_json_character(stream, (unsigned char)*value);
@@ -66,8 +69,11 @@ static void report_json(const legibility_diagnostic *diagnostic, FILE *stream) {
 }
 
 static void report_text(const legibility_diagnostic *diagnostic, FILE *stream) {
-  fprintf(stream, "%s: %s %s: %s\n", diagnostic->path,
-          severity_name(diagnostic->severity), diagnostic->code, diagnostic->message);
+  const char *path = safe_string(diagnostic->path);
+  const char *code = safe_string(diagnostic->code);
+  const char *message = safe_string(diagnostic->message);
+  fprintf(stream, "%s: %s %s: %s\n", path, severity_name(diagnostic->severity), code,
+          message);
 }
 
 void cli_report(const legibility_diagnostic *diagnostic, void *user_data) {

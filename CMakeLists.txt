@@ -64,6 +64,11 @@ if(BUILD_TESTING)
   target_link_libraries(legibility-test PRIVATE legibility)
   legibility_enable_warnings(legibility-test)
   add_test(NAME core-policy COMMAND legibility-test)
+  add_executable(cli-output-test tests/cli_output_test.c src/cli_output.c)
+  target_include_directories(cli-output-test PRIVATE src)
+  target_link_libraries(cli-output-test PRIVATE legibility)
+  legibility_enable_warnings(cli-output-test)
+  add_test(NAME cli-output COMMAND cli-output-test)
   add_test(
     NAME cli-deny-new-file
     COMMAND

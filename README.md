@@ -32,6 +32,8 @@ Strict JSON is supported in `.legibilityrc` and `.legibilityrc.json`:
 }
 ```
 
+`newFiles.default` defaults to `"deny"` when omitted.
+
 Configuration discovery starts at the lint root and stops at the repository
 root. Multiple configuration files in one directory are an error. YAML and
 TOML readers are reserved for later adapters.
@@ -54,7 +56,7 @@ configuration or usage errors.
 <!-- public types and functions exported by include/legibility.h -->
 
 `liblegibility` accepts normalized configuration and file changes through one
-function:
+function. Paths and allow patterns are limited to 4,096 characters.
 
 ```c
 const legibility_config config = {

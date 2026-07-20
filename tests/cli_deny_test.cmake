@@ -3,7 +3,7 @@ file(MAKE_DIRECTORY "${TEST_ROOT}")
 file(
   WRITE
   "${TEST_ROOT}/.legibilityrc.json"
-  "{\"version\":1,\"newFiles\":{\"default\":\"deny\"}}"
+  "{\"version\":1,\"newFiles\":{}}"
 )
 
 execute_process(

@@ -132,6 +132,9 @@ static bool read_version(yyjson_val *root, cli_config *config) {
 
 static bool read_default(yyjson_val *new_files, cli_config *config) {
   yyjson_val *value = yyjson_obj_get(new_files, "default");
+  if (value == NULL) {
+    return true;
+  }
   const char *setting = yyjson_get_str(value);
   if (setting == NULL) {
     return fail(config, "newFiles.default must be \"allow\" or \"deny\"");

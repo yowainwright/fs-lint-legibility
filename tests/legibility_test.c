@@ -45,6 +45,16 @@ static void test_denies_added_file(void) {
   }
 }
 
+static void test_defaults_to_deny(void) {
+  const legibility_config config = {0};
+  captured_diagnostics captured = {0};
+  const legibility_status status = check(&config, "src/new-helper.c", &captured);
+  const int denied = status == LEGIBILITY_STATUS_VIOLATIONS;
+  if (!denied || strcmp(captured.code, "files/new") != 0) {
+    fail("expected a zero-initialized configuration to deny added files");
+  }
+}
+
 static void test_allows_established_pattern(void) {
   const char *allow_patterns[] = {"src/**/index.c"};
   const legibility_config config = {
@@ -129,13 +139,75 @@ static void test_rejects_missing_allow_pattern(void) {
   }
 }
 
+static void test_rejects_invalid_default(void) {
+  const legibility_config config = {
+      .new_files_default = (legibility_new_files_default)99,
+  };
+  captured_diagnostics captured = {0};
+  const legibility_status status = check(&config, "src/new-helper.c", &captured);
+  const int rejected = status == LEGIBILITY_STATUS_ERROR;
+  if (!rejected || strcmp(captured.code, "input/invalid") != 0) {
+    fail("expected an invalid new-file default to return an error diagnostic");
+  }
+}
+
+static void test_rejects_invalid_change_kind(void) {
+  const legibility_config config = {0};
+  const legibility_change change = {
+      .path = "src/new-helper.c",
+      .kind = (legibility_change_kind)99,
+  };
+  captured_diagnostics captured = {0};
+  const legibility_status status =
+      legibility_check(&config, &change, 1, capture, &captured);
+  const int rejected = status == LEGIBILITY_STATUS_ERROR;
+  if (!rejected || strcmp(captured.code, "input/invalid") != 0) {
+    fail("expected an invalid change kind to return an error diagnostic");
+  }
+}
+
+static void test_rejects_oversized_path(void) {
+  char path[LEGIBILITY_MAX_PATH_LENGTH + 2];
+  memset(path, 'a', sizeof(path) - 1);
+  path[sizeof(path) - 1] = '\0';
+  const legibility_config config = {0};
+  captured_diagnostics captured = {0};
+  const legibility_status status = check(&config, path, &captured);
+  const int rejected = status == LEGIBILITY_STATUS_ERROR;
+  if (!rejected || strcmp(captured.code, "input/invalid") != 0) {
+    fail("expected an oversized path to return an error diagnostic");
+  }
+}
+
+static void test_rejects_oversized_pattern(void) {
+  char pattern[LEGIBILITY_MAX_PATTERN_LENGTH + 2];
+  memset(pattern, 'a', sizeof(pattern) - 1);
+  pattern[sizeof(pattern) - 1] = '\0';
+  const char *allow_patterns[] = {pattern};
+  const legibility_config config = {
+      .allow_patterns = allow_patterns,
+      .allow_pattern_count = 1,
+  };
+  captured_diagnostics captured = {0};
+  const legibility_status status = check(&config, "src/new-helper.c", &captured);
+  const int rejected = status == LEGIBILITY_STATUS_ERROR;
+  if (!rejected || strcmp(captured.code, "input/invalid") != 0) {
+    fail("expected an oversized pattern to return an error diagnostic");
+  }
+}
+
 int main(void) {
   test_denies_added_file();
+  test_defaults_to_deny();
   test_allows_established_pattern();
   test_rejects_missing_config();
   test_rejects_missing_changes();
   test_rejects_missing_path();
   test_rejects_missing_allow_patterns();
   test_rejects_missing_allow_pattern();
+  test_rejects_invalid_default();
+  test_rejects_invalid_change_kind();
+  test_rejects_oversized_path();
+  test_rejects_oversized_pattern();
   return EXIT_SUCCESS;
 }

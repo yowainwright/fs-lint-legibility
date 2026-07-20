@@ -3,6 +3,7 @@
 #include "glob.h"
 
 #include <stdbool.h>
+#include <string.h>
 
 static void report_invalid_input(const char *message, legibility_reporter reporter,
                                  void *user_data) {
@@ -24,6 +25,15 @@ static const char *validate_changes(const legibility_change *changes,
     if (changes[index].path == NULL) {
       return "every change requires a path";
     }
+    if (strlen(changes[index].path) > LEGIBILITY_MAX_PATH_LENGTH) {
+      return "change path exceeds LEGIBILITY_MAX_PATH_LENGTH";
+    }
+    const bool valid_kind = changes[index].kind == LEGIBILITY_CHANGE_ADDED ||
+                            changes[index].kind == LEGIBILITY_CHANGE_MODIFIED ||
+                            changes[index].kind == LEGIBILITY_CHANGE_DELETED;
+    if (!valid_kind) {
+      return "every change requires a valid kind";
+    }
   }
   return NULL;
 }
@@ -33,6 +43,9 @@ static const char *validate_patterns(const legibility_config *config) {
     if (config->allow_patterns[index] == NULL) {
       return "every allow pattern requires a value";
     }
+    if (strlen(config->allow_patterns[index]) > LEGIBILITY_MAX_PATTERN_LENGTH) {
+      return "allow pattern exceeds LEGIBILITY_MAX_PATTERN_LENGTH";
+    }
   }
   return NULL;
 }
@@ -40,6 +53,11 @@ static const char *validate_patterns(const legibility_config *config) {
 static const char *validate_config(const legibility_config *config) {
   if (config == NULL) {
     return "configuration is required";
+  }
+  const bool valid_default = config->new_files_default == LEGIBILITY_NEW_FILES_DENY ||
+                             config->new_files_default == LEGIBILITY_NEW_FILES_ALLOW;
+  if (!valid_default) {
+    return "new_files_default is invalid";
   }
   const bool missing_patterns =
       config->allow_pattern_count > 0 && config->allow_patterns == NULL;
