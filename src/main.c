@@ -20,14 +20,29 @@ typedef struct {
   bool staged;
 } cli_arguments;
 
-static int usage(void) {
+static void print_usage(FILE *stream) {
   fputs("usage: fs-lint check-path [--root path] [--config path] "
         "[--format text|json] <path>\n",
-        stderr);
+        stream);
   fputs("usage: fs-lint check (--stdin0|--staged|--base ref) [--root path] "
         "[--config path] [--format text|json]\n",
-        stderr);
+        stream);
+}
+
+static int usage(void) {
+  print_usage(stderr);
   return LEGIBILITY_STATUS_ERROR;
+}
+
+static bool wants_help(int argc, char **argv) {
+  if (argc != 2) {
+    return false;
+  }
+  return strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-h") == 0;
+}
+
+static bool wants_version(int argc, char **argv) {
+  return argc == 2 && strcmp(argv[1], "--version") == 0;
 }
 
 static void initialize_arguments(cli_arguments *arguments) {
@@ -245,6 +260,14 @@ static int check_batch(const cli_arguments *arguments) {
 }
 
 int main(int argc, char **argv) {
+  if (wants_help(argc, argv)) {
+    print_usage(stdout);
+    return LEGIBILITY_STATUS_OK;
+  }
+  if (wants_version(argc, argv)) {
+    printf("fs-lint %s\n", FS_LINT_VERSION);
+    return LEGIBILITY_STATUS_OK;
+  }
   cli_arguments arguments;
   if (!parse_arguments(argc, argv, &arguments)) {
     return usage();

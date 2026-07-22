@@ -227,8 +227,17 @@ static bool read_git(const char *root, const char *const arguments[],
 
 bool cli_changes_read_git_staged(const char *root, cli_changes *changes) {
   const char *const arguments[] = {
-      "git",          "diff", "--cached", "--name-only", "--diff-filter=A",
-      "--no-renames", "-z",   "--",       NULL,
+      "git",
+      "diff",
+      "--cached",
+      "--name-only",
+      "--diff-filter=A",
+      "--no-renames",
+      "--no-relative",
+      "--ignore-submodules=none",
+      "-z",
+      "--",
+      NULL,
   };
   return read_git(root, arguments, changes);
 }
@@ -236,8 +245,18 @@ bool cli_changes_read_git_staged(const char *root, cli_changes *changes) {
 bool cli_changes_read_git_base(const char *root, const char *base,
                                cli_changes *changes) {
   const char *const arguments[] = {
-      "git",          "diff", "--merge-base", "--name-only", "--diff-filter=A",
-      "--no-renames", "-z",   base,           "HEAD",        "--",
+      "git",
+      "diff",
+      "--merge-base",
+      "--name-only",
+      "--diff-filter=A",
+      "--no-renames",
+      "--no-relative",
+      "--ignore-submodules=none",
+      "-z",
+      base,
+      "HEAD",
+      "--",
       NULL,
   };
   return read_git(root, arguments, changes);

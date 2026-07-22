@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.20)
 project(fs_lint_legibility VERSION 0.1.0 LANGUAGES C)
 
 include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
 
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -25,7 +26,7 @@ target_include_directories(
   legibility
   PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    $<INSTALL_INTERFACE:include>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
   PRIVATE src
 )
 
@@ -41,6 +42,7 @@ add_executable(
 )
 target_include_directories(fs-lint PRIVATE src)
 target_link_libraries(fs-lint PRIVATE legibility yyjson)
+target_compile_definitions(fs-lint PRIVATE FS_LINT_VERSION="${PROJECT_VERSION}")
 legibility_enable_warnings(fs-lint)
 
 install(
@@ -50,10 +52,32 @@ install(
   RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 install(FILES include/legibility.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+install(FILES LICENSE DESTINATION ${CMAKE_INSTALL_DOCDIR})
+install(
+  FILES vendor/yyjson/LICENSE
+  DESTINATION ${CMAKE_INSTALL_DOCDIR}
+  RENAME yyjson-LICENSE
+)
+configure_package_config_file(
+  cmake/legibility-config.cmake.in
+  ${CMAKE_CURRENT_BINARY_DIR}/legibility-config.cmake
+  INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/legibility
+)
+write_basic_package_version_file(
+  ${CMAKE_CURRENT_BINARY_DIR}/legibility-config-version.cmake
+  VERSION ${PROJECT_VERSION}
+  COMPATIBILITY SameMajorVersion
+)
 install(
   EXPORT legibility-targets
   FILE legibility-targets.cmake
   NAMESPACE legibility::
+  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/legibility
+)
+install(
+  FILES
+    ${CMAKE_CURRENT_BINARY_DIR}/legibility-config.cmake
+    ${CMAKE_CURRENT_BINARY_DIR}/legibility-config-version.cmake
   DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/legibility
 )
 
@@ -81,6 +105,7 @@ if(BUILD_TESTING)
         ${CMAKE_COMMAND}
         -DFS_LINT=$<TARGET_FILE:fs-lint>
         -DTEST_ROOT=${test_root}
+        -DPROJECT_BUILD_DIR=${CMAKE_CURRENT_BINARY_DIR}
         -P ${test_script}
     )
     set_tests_properties(${test_name} PROPERTIES LABELS "e2e;binary")
@@ -90,6 +115,7 @@ if(BUILD_TESTING)
   add_fs_lint_e2e(explicit-config)
   add_fs_lint_e2e(git-staged)
   add_fs_lint_e2e(invalid-config)
+  add_fs_lint_e2e(install)
   add_fs_lint_e2e(json-output)
   add_fs_lint_e2e(policy)
   add_fs_lint_e2e(readme-rules)

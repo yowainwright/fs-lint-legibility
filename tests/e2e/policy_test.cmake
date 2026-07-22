@@ -44,6 +44,31 @@ if(NOT allow_status EQUAL 0 OR NOT allow_output STREQUAL "")
   message(FATAL_ERROR "expected explicit allow to exit cleanly: ${allow_output}")
 endif()
 
+execute_process(
+  COMMAND "${FS_LINT}" check-path ../outside.c
+  WORKING_DIRECTORY "${TEST_ROOT}"
+  RESULT_VARIABLE relative_status
+  OUTPUT_VARIABLE relative_output
+  ERROR_VARIABLE relative_error
+)
+
+set(
+  expected_relative_error
+  ": error input/invalid: change path must be normalized and repository-relative\n"
+)
+
+if(NOT relative_status EQUAL 2)
+  message(FATAL_ERROR "expected non-relative path exit code 2")
+endif()
+
+if(NOT relative_output STREQUAL expected_relative_error)
+  message(FATAL_ERROR "unexpected non-relative path output: ${relative_output}")
+endif()
+
+if(NOT relative_error STREQUAL "")
+  message(FATAL_ERROR "expected empty non-relative path stderr: ${relative_error}")
+endif()
+
 string(
   CONCAT
   pattern_config

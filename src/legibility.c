@@ -19,6 +19,41 @@ static void report_error(const char *code, const char *path, const char *message
   reporter(&diagnostic, user_data);
 }
 
+static bool is_path_separator(char value) { return value == '/' || value == '\\'; }
+
+static bool valid_path_segment(const char *segment, size_t length) {
+  if (length == 0) {
+    return false;
+  }
+  const bool current = length == 1 && segment[0] == '.';
+  const bool parent = length == 2 && segment[0] == '.' && segment[1] == '.';
+  return !current && !parent;
+}
+
+static bool valid_path_segments(const char *path) {
+  const char *segment = path;
+  for (const char *cursor = path;; cursor += 1) {
+    const bool boundary = *cursor == '\0' || is_path_separator(*cursor);
+    if (!boundary) {
+      continue;
+    }
+    if (!valid_path_segment(segment, (size_t)(cursor - segment))) {
+      return false;
+    }
+    if (*cursor == '\0') {
+      return true;
+    }
+    segment = cursor + 1;
+  }
+}
+
+static bool normalized_repository_path(const char *path) {
+  if (path[0] == '\0' || is_path_separator(path[0])) {
+    return false;
+  }
+  return valid_path_segments(path);
+}
+
 static const char *validate_changes(const legibility_change *changes,
                                     size_t change_count) {
   for (size_t index = 0; index < change_count; index += 1) {
@@ -27,6 +62,9 @@ static const char *validate_changes(const legibility_change *changes,
     }
     if (strlen(changes[index].path) > LEGIBILITY_MAX_PATH_LENGTH) {
       return "change path exceeds LEGIBILITY_MAX_PATH_LENGTH";
+    }
+    if (!normalized_repository_path(changes[index].path)) {
+      return "change path must be normalized and repository-relative";
     }
     const bool valid_kind = changes[index].kind == LEGIBILITY_CHANGE_ADDED ||
                             changes[index].kind == LEGIBILITY_CHANGE_MODIFIED ||

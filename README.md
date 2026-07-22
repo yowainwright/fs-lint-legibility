@@ -1,11 +1,13 @@
-# fs-lint
+# fs-lint-legibility
 
 <!-- project language and license matching CMakeLists.txt and LICENSE -->
 
 [![C17](https://img.shields.io/badge/C-17-00599C?logo=c&logoColor=white)](./CMakeLists.txt)
+[![CI](/yowainwright/fs-lint-legibility/actions/workflows/ci.yml/badge.svg)](/yowainwright/fs-lint-legibility/actions/workflows/ci.yml)
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#language-support)
 
+`fs-lint-legibility` is the project and release name; `fs-lint` is its command.
 Most filename linters start by asking what a file should be called. `fs-lint`
 starts one step earlier: does this change need another file at all?
 
@@ -16,15 +18,39 @@ used from Git hooks, CI, editors, and coding agents.
 This is an early preview. The first policy denies new files by default while
 allowing established path patterns.
 
-## Build
+## Requirements
 
-<!-- build and test commands matching CMakeLists.txt -->
+<!-- supported platforms and tool versions matching CMakeLists.txt and CI workflows -->
+
+| Surface | Supported for 0.1 |
+| --- | --- |
+| Operating systems | Linux and macOS |
+| C compiler | GCC or Clang with C17 support |
+| CMake | 3.20 or newer |
+| Git-backed checks | Git 2.30 or newer |
+
+Git is not required for `check-path` or `check --stdin0`. The CLI uses POSIX
+process and filesystem APIs; native Windows support is deferred.
+
+## Build and install
+
+<!-- build, test, and install commands matching CMakeLists.txt -->
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel
 ctest --test-dir build --output-on-failure
 cmake --build build --target e2e
+cmake --install build --prefix ./dist
+```
+
+The install contains `bin/fs-lint`, `include/legibility.h`, the static policy
+library, CMake package files, and the project and yyjson MIT licenses. CMake
+consumers can use the exported target directly:
+
+```cmake
+find_package(legibility 0.1 CONFIG REQUIRED)
+target_link_libraries(your-target PRIVATE legibility::legibility)
 ```
 
 ## Configuration
@@ -54,6 +80,10 @@ Allow recurring file families explicitly:
 ```
 
 `newFiles.default` defaults to `"deny"` when omitted.
+
+Configuration input is bounded before JSON parsing. A file may contain at most
+1,048,576 bytes, 4,096 allow patterns, 262,144 aggregate pattern bytes, and
+4,096 bytes per pattern.
 
 Configuration discovery starts at the lint root and stops at the repository
 root. Multiple configuration files in one directory are an error. YAML and
@@ -97,15 +127,28 @@ fs-lint check-path --root . --config .legibilityrc.json src/new-helper.c
 fs-lint check --staged
 fs-lint check --base origin/main
 git diff --name-only --diff-filter=A --no-renames -z | fs-lint check --stdin0
+fs-lint --help
+fs-lint --version
 ```
 
 `check` accepts exactly one change source. `--stdin0` treats each NUL-delimited
 path as added, `--staged` checks added paths in the Git index, and `--base`
 checks additions on `HEAD` since its merge base with a Git ref. Rename
-destinations are checked as additions.
+destinations and added submodules are checked as additions. Git configuration
+cannot make these collectors relative to a subdirectory or hide submodules.
+
+Input paths must be normalized and repository-relative. Absolute paths, empty
+segments, trailing separators, and `.` or `..` segments are rejected.
+Git-backed sources produce repository-relative paths even when `--root` names
+a subdirectory. Callers of `check-path` and `check --stdin0` provide paths in
+the same form.
 
 Exit code `0` allows the path, `1` reports policy violations, and `2` reports
 configuration or usage errors.
+
+Text diagnostics escape controls and backslashes so every diagnostic occupies
+one line. JSON diagnostics preserve valid UTF-8 and escape invalid filename
+bytes, so every emitted line is valid JSON.
 
 ## Examples
 
@@ -148,8 +191,9 @@ src/new-helper.c: error files/new: new file is not allowed by configuration
 
 <!-- public types and functions exported by include/legibility.h -->
 
-`liblegibility` accepts normalized configuration and file changes through one
-function. Paths and allow patterns are limited to 4,096 characters.
+`liblegibility` accepts normalized configuration and repository-relative file
+changes through one function. Paths and allow patterns are limited to 4,096
+bytes.
 
 ```c
 const legibility_config config = {
@@ -171,6 +215,17 @@ legibility_status status = legibility_check(
 
 Configuration parsing, Git integration, and agent hooks remain outside the
 core library.
+
+## Releases
+
+<!-- release behavior matching project version and .github/workflows/release.yml -->
+
+A tag matching the compiled version, such as `v0.1.0`, runs the complete test
+suite, installs the release payload, and publishes Linux and macOS archives to
+GitHub. Each archive includes the CLI, library, headers, CMake package files,
+and licenses, with a SHA-256 checksum beside it. GitHub generates release notes
+from merged changes. Project-level changes are tracked in
+[`CHANGELOG.md`](./CHANGELOG.md).
 
 ## Language support
 

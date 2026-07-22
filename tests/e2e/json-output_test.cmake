@@ -1,5 +1,6 @@
 file(REMOVE_RECURSE "${TEST_ROOT}")
 file(MAKE_DIRECTORY "${TEST_ROOT}")
+file(REAL_PATH "${TEST_ROOT}" canonical_root)
 file(
   WRITE
   "${TEST_ROOT}/.legibilityrc.json"
@@ -54,7 +55,7 @@ string(
   expected_config_output
   "{\"severity\":\"error\","
   "\"code\":\"config/invalid\","
-  "\"path\":\"${TEST_ROOT}/.legibilityrc.json\","
+  "\"path\":\"${canonical_root}/.legibilityrc.json\","
   "\"message\":\"version must be 1\"}\n"
 )
 

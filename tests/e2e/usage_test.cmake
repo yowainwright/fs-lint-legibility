@@ -29,6 +29,44 @@ if(NOT error STREQUAL expected_error)
 endif()
 
 execute_process(
+  COMMAND "${FS_LINT}" --help
+  RESULT_VARIABLE help_status
+  OUTPUT_VARIABLE help_output
+  ERROR_VARIABLE help_error
+)
+
+if(NOT help_status EQUAL 0)
+  message(FATAL_ERROR "expected help exit code 0, received ${help_status}")
+endif()
+
+if(NOT help_output STREQUAL expected_error)
+  message(FATAL_ERROR "unexpected help output: ${help_output}")
+endif()
+
+if(NOT help_error STREQUAL "")
+  message(FATAL_ERROR "expected empty help stderr: ${help_error}")
+endif()
+
+execute_process(
+  COMMAND "${FS_LINT}" --version
+  RESULT_VARIABLE version_status
+  OUTPUT_VARIABLE version_output
+  ERROR_VARIABLE version_error
+)
+
+if(NOT version_status EQUAL 0)
+  message(FATAL_ERROR "expected version exit code 0, received ${version_status}")
+endif()
+
+if(NOT version_output STREQUAL "fs-lint 0.1.0\n")
+  message(FATAL_ERROR "unexpected version output: ${version_output}")
+endif()
+
+if(NOT version_error STREQUAL "")
+  message(FATAL_ERROR "expected empty version stderr: ${version_error}")
+endif()
+
+execute_process(
   COMMAND "${FS_LINT}" check --stdin0 --staged
   RESULT_VARIABLE sources_status
   OUTPUT_VARIABLE sources_output

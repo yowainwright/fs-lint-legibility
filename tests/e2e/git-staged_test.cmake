@@ -159,6 +159,125 @@ if(NOT rename_error STREQUAL "")
   message(FATAL_ERROR "expected empty renamed path stderr: ${rename_error}")
 endif()
 
+run_git(-c user.name=fs-lint -c user.email=fs-lint@example.test commit -qm rename)
+run_git(config diff.relative true)
+file(WRITE "${TEST_ROOT}/outside-root.c" "int outside(void) { return 1; }\n")
+run_git(add outside-root.c)
+
+execute_process(
+  COMMAND "${FS_LINT}" check --staged --root "${TEST_ROOT}/src"
+  RESULT_VARIABLE relative_status
+  OUTPUT_VARIABLE relative_output
+  ERROR_VARIABLE relative_error
+)
+
+set(
+  expected_relative
+  "outside-root.c: error files/new: new file is not allowed by configuration\n"
+)
+
+if(NOT relative_status EQUAL 1)
+  message(FATAL_ERROR "expected repository-wide staged violation: ${relative_error}")
+endif()
+
+if(NOT relative_output STREQUAL expected_relative)
+  message(FATAL_ERROR "unexpected repository-relative output: ${relative_output}")
+endif()
+
+if(NOT relative_error STREQUAL "")
+  message(FATAL_ERROR "expected empty repository-relative stderr: ${relative_error}")
+endif()
+
+run_git(-c user.name=fs-lint -c user.email=fs-lint@example.test commit -qm outside)
+
+execute_process(
+  COMMAND "${FS_LINT}" check --base HEAD~1 --root "${TEST_ROOT}/src"
+  RESULT_VARIABLE relative_base_status
+  OUTPUT_VARIABLE relative_base_output
+  ERROR_VARIABLE relative_base_error
+)
+
+if(NOT relative_base_status EQUAL 1)
+  message(FATAL_ERROR "expected repository-wide base violation: ${relative_base_error}")
+endif()
+
+if(NOT relative_base_output STREQUAL expected_relative)
+  message(FATAL_ERROR "unexpected base repository-relative output: ${relative_base_output}")
+endif()
+
+if(NOT relative_base_error STREQUAL "")
+  message(FATAL_ERROR "expected empty base repository-relative stderr")
+endif()
+
+set(submodule_source "${TEST_ROOT}-submodule-source")
+file(REMOVE_RECURSE "${submodule_source}")
+file(MAKE_DIRECTORY "${submodule_source}")
+run_git(-C "${submodule_source}" -c init.defaultBranch=main init -q)
+file(WRITE "${submodule_source}/library.c" "int library(void) { return 1; }\n")
+run_git(-C "${submodule_source}" add library.c)
+run_git(
+  -C "${submodule_source}"
+  -c user.name=fs-lint
+  -c user.email=fs-lint@example.test
+  commit -qm initial
+)
+
+run_git(
+  -c protocol.file.allow=always
+  submodule add -q "${submodule_source}" deps/existing
+)
+run_git(-c user.name=fs-lint -c user.email=fs-lint@example.test commit -qam submodule)
+run_git(config diff.ignoreSubmodules all)
+run_git(
+  -c protocol.file.allow=always
+  submodule add -q "${submodule_source}" deps/new-module
+)
+
+execute_process(
+  COMMAND "${FS_LINT}" check --staged --root "${TEST_ROOT}"
+  RESULT_VARIABLE submodule_status
+  OUTPUT_VARIABLE submodule_output
+  ERROR_VARIABLE submodule_error
+)
+
+set(
+  expected_submodule
+  "deps/new-module: error files/new: new file is not allowed by configuration\n"
+)
+
+if(NOT submodule_status EQUAL 1)
+  message(FATAL_ERROR "expected staged submodule violation: ${submodule_error}")
+endif()
+
+if(NOT submodule_output STREQUAL expected_submodule)
+  message(FATAL_ERROR "unexpected staged submodule output: ${submodule_output}")
+endif()
+
+if(NOT submodule_error STREQUAL "")
+  message(FATAL_ERROR "expected empty staged submodule stderr: ${submodule_error}")
+endif()
+
+run_git(-c user.name=fs-lint -c user.email=fs-lint@example.test commit -qam addition)
+
+execute_process(
+  COMMAND "${FS_LINT}" check --base HEAD~1 --root "${TEST_ROOT}"
+  RESULT_VARIABLE submodule_base_status
+  OUTPUT_VARIABLE submodule_base_output
+  ERROR_VARIABLE submodule_base_error
+)
+
+if(NOT submodule_base_status EQUAL 1)
+  message(FATAL_ERROR "expected base submodule violation: ${submodule_base_error}")
+endif()
+
+if(NOT submodule_base_output STREQUAL expected_submodule)
+  message(FATAL_ERROR "unexpected base submodule output: ${submodule_base_output}")
+endif()
+
+if(NOT submodule_base_error STREQUAL "")
+  message(FATAL_ERROR "expected empty base submodule stderr: ${submodule_base_error}")
+endif()
+
 set(non_repo "${TEST_ROOT}-not-repo")
 file(REMOVE_RECURSE "${non_repo}")
 file(MAKE_DIRECTORY "${non_repo}")

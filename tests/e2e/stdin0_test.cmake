@@ -41,6 +41,37 @@ endif()
 
 string(
   CONCAT
+  control_command
+  "printf 'src/line\\nbreak.c\\000' | "
+  "\"$1\" check --stdin0 --root \"$2\""
+)
+
+execute_process(
+  COMMAND /bin/sh -c "${control_command}" fs-lint-e2e "${FS_LINT}" "${TEST_ROOT}"
+  RESULT_VARIABLE control_status
+  OUTPUT_VARIABLE control_output
+  ERROR_VARIABLE control_error
+)
+
+set(
+  expected_control
+  "src/line\\nbreak.c: error files/new: new file is not allowed by configuration\n"
+)
+
+if(NOT control_status EQUAL 1)
+  message(FATAL_ERROR "expected control-character violation: ${control_error}")
+endif()
+
+if(NOT control_output STREQUAL expected_control)
+  message(FATAL_ERROR "unexpected escaped text output: ${control_output}")
+endif()
+
+if(NOT control_error STREQUAL "")
+  message(FATAL_ERROR "expected empty control-character stderr: ${control_error}")
+endif()
+
+string(
+  CONCAT
   json_command
   "printf 'src/line\\nbreak.c\\000' | "
   "\"$1\" check --stdin0 --root \"$2\" --format json"
@@ -72,6 +103,43 @@ endif()
 
 if(NOT json_error STREQUAL "")
   message(FATAL_ERROR "expected empty JSON batch stderr: ${json_error}")
+endif()
+
+string(
+  CONCAT
+  invalid_utf8_command
+  "printf 'src/\\377.c\\000' | "
+  "\"$1\" check --stdin0 --root \"$2\" --format json"
+)
+
+execute_process(
+  COMMAND
+    /bin/sh -c "${invalid_utf8_command}" fs-lint-e2e "${FS_LINT}" "${TEST_ROOT}"
+  RESULT_VARIABLE invalid_utf8_status
+  OUTPUT_VARIABLE invalid_utf8_output
+  ERROR_VARIABLE invalid_utf8_error
+  ENCODING NONE
+)
+
+string(
+  CONCAT
+  expected_invalid_utf8
+  "{\"severity\":\"error\","
+  "\"code\":\"files/new\","
+  "\"path\":\"src/\\u00ff.c\","
+  "\"message\":\"new file is not allowed by configuration\"}\n"
+)
+
+if(NOT invalid_utf8_status EQUAL 1)
+  message(FATAL_ERROR "expected invalid UTF-8 filename violation")
+endif()
+
+if(NOT invalid_utf8_output STREQUAL expected_invalid_utf8)
+  message(FATAL_ERROR "unexpected invalid UTF-8 JSON output: ${invalid_utf8_output}")
+endif()
+
+if(NOT invalid_utf8_error STREQUAL "")
+  message(FATAL_ERROR "expected empty invalid UTF-8 stderr: ${invalid_utf8_error}")
 endif()
 
 string(

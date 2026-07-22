@@ -1,6 +1,18 @@
 # Prerequisites
 *.d
 
+# CMake
+/build/
+/build-*/
+/CMakeCache.txt
+/CMakeFiles/
+/cmake_install.cmake
+/CTestTestfile.cmake
+/dist/
+/install_manifest.txt
+/Makefile
+/Testing/
+
 # Object files
 *.o
 *.ko

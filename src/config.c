@@ -7,6 +7,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define CLI_MAX_CONFIG_BYTES 1048576
+#define CLI_MAX_ALLOW_PATTERNS 4096
+#define CLI_MAX_ALLOW_PATTERN_BYTES 262144
+
 typedef struct {
   const char *name;
   bool seen;
@@ -68,6 +72,73 @@ static const char *format_error(const char *path) {
 static bool fail(cli_config *config, const char *message) {
   snprintf(config->error, sizeof(config->error), "%s", message);
   return false;
+}
+
+static bool measure_config(FILE *stream, size_t *length, cli_config *config) {
+  if (fseek(stream, 0, SEEK_END) != 0) {
+    return fail(config, "could not read configuration");
+  }
+  const long position = ftell(stream);
+  if (position < 0) {
+    return fail(config, "could not read configuration");
+  }
+  if ((unsigned long)position > CLI_MAX_CONFIG_BYTES) {
+    return fail(config, "configuration exceeds 1048576 bytes");
+  }
+  *length = (size_t)position;
+  if (fseek(stream, 0, SEEK_SET) != 0) {
+    return fail(config, "could not read configuration");
+  }
+  return true;
+}
+
+static bool read_config_data(FILE *stream, char *data, size_t length,
+                             cli_config *config) {
+  const size_t read = fread(data, 1, length, stream);
+  if (read != length || ferror(stream)) {
+    return fail(config, "configuration changed while reading");
+  }
+  const int extra = feof(stream) ? EOF : fgetc(stream);
+  if (extra != EOF || ferror(stream)) {
+    return fail(config, "configuration changed while reading");
+  }
+  data[length] = '\0';
+  return true;
+}
+
+static char *load_config_data(const char *path, size_t *length, cli_config *config) {
+  FILE *stream = fopen(path, "rb");
+  if (stream == NULL) {
+    fail(config, "could not open configuration");
+    return NULL;
+  }
+  const bool measured = measure_config(stream, length, config);
+  char *data = measured ? malloc(*length + 1) : NULL;
+  if (measured && data == NULL) {
+    fail(config, "could not allocate configuration");
+  }
+  const bool loaded = data != NULL && read_config_data(stream, data, *length, config);
+  fclose(stream);
+  if (loaded) {
+    return data;
+  }
+  free(data);
+  return NULL;
+}
+
+static yyjson_doc *load_document(const char *path, cli_config *config) {
+  size_t length = 0;
+  char *data = load_config_data(path, &length, config);
+  if (data == NULL) {
+    return NULL;
+  }
+  yyjson_read_err error;
+  yyjson_doc *document = yyjson_read_opts(data, length, 0, NULL, &error);
+  free(data);
+  if (document == NULL) {
+    fail(config, error.msg);
+  }
+  return document;
 }
 
 static size_t find_key(const char *name, const expected_key *keys, size_t key_count) {
@@ -163,10 +234,26 @@ static bool allocate_patterns(size_t count, cli_config *config) {
   return true;
 }
 
-static bool copy_pattern(yyjson_val *value, size_t index, cli_config *config) {
+static bool add_pattern_size(const char *pattern, size_t *total, cli_config *config) {
+  const size_t length = strlen(pattern);
+  if (length > LEGIBILITY_MAX_PATTERN_LENGTH) {
+    return fail(config, "allow pattern exceeds LEGIBILITY_MAX_PATTERN_LENGTH");
+  }
+  if (length > CLI_MAX_ALLOW_PATTERN_BYTES - *total) {
+    return fail(config, "newFiles.allow exceeds 262144 bytes");
+  }
+  *total += length;
+  return true;
+}
+
+static bool copy_pattern(yyjson_val *value, size_t index, size_t *total,
+                         cli_config *config) {
   const char *pattern = yyjson_get_str(value);
   if (pattern == NULL) {
     return fail(config, "newFiles.allow must contain only strings");
+  }
+  if (!add_pattern_size(pattern, total, config)) {
+    return false;
   }
   config->owned_allow_patterns[index] = copy_string(pattern);
   if (config->owned_allow_patterns[index] == NULL) {
@@ -184,15 +271,19 @@ static bool read_allow(yyjson_val *new_files, cli_config *config) {
     return fail(config, "newFiles.allow must be an array of strings");
   }
   const size_t count = yyjson_arr_size(allow);
+  if (count > CLI_MAX_ALLOW_PATTERNS) {
+    return fail(config, "newFiles.allow exceeds 4096 patterns");
+  }
   if (!allocate_patterns(count, config)) {
     return false;
   }
 
   size_t index;
   size_t maximum;
+  size_t total = 0;
   yyjson_val *value;
   yyjson_arr_foreach(allow, index, maximum, value) {
-    if (!copy_pattern(value, index, config)) {
+    if (!copy_pattern(value, index, &total, config)) {
       return false;
     }
   }
@@ -249,10 +340,9 @@ bool cli_config_load(const char *root, const char *config_path, cli_config *conf
     return fail(config, unsupported_format);
   }
 
-  yyjson_read_err error;
-  yyjson_doc *document = yyjson_read_file(config->source_path, 0, NULL, &error);
+  yyjson_doc *document = load_document(config->source_path, config);
   if (document == NULL) {
-    return fail(config, error.msg);
+    return false;
   }
   const bool valid = parse_document(document, config);
   yyjson_doc_free(document);
