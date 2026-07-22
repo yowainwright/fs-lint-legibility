@@ -279,6 +279,7 @@ if(NOT submodule_base_error STREQUAL "")
 endif()
 
 set(non_repo "${TEST_ROOT}-not-repo")
+get_filename_component(non_repo_parent "${non_repo}" DIRECTORY)
 file(REMOVE_RECURSE "${non_repo}")
 file(MAKE_DIRECTORY "${non_repo}")
 file(
@@ -288,7 +289,15 @@ file(
 )
 
 execute_process(
-  COMMAND "${FS_LINT}" check --staged --root "${non_repo}"
+  COMMAND
+    "${CMAKE_COMMAND}"
+    -E env
+    "GIT_CEILING_DIRECTORIES=${non_repo_parent}"
+    "${FS_LINT}"
+    check
+    --staged
+    --root
+    "${non_repo}"
   RESULT_VARIABLE git_error_status
   OUTPUT_VARIABLE git_error_output
   ERROR_VARIABLE git_error
