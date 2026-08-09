@@ -83,6 +83,19 @@ static void test_allows_globstar_without_directory(void) {
   }
 }
 
+static void test_allows_backslash_globstar_without_directory(void) {
+  const char *allow_patterns[] = {"src\\**\\index.c"};
+  const legibility_config config = {
+      .allow_patterns = allow_patterns,
+      .allow_pattern_count = 1,
+  };
+  captured_diagnostics captured = {0};
+  const legibility_status status = check(&config, "src/index.c", &captured);
+  if (status != LEGIBILITY_STATUS_OK || captured.count != 0) {
+    fail("expected backslash globstar directory to match zero directories");
+  }
+}
+
 static void test_star_does_not_cross_directory(void) {
   const char *allow_patterns[] = {"src/*.c"};
   const legibility_config config = {
@@ -243,6 +256,7 @@ int main(void) {
   test_defaults_to_deny();
   test_allows_established_pattern();
   test_allows_globstar_without_directory();
+  test_allows_backslash_globstar_without_directory();
   test_star_does_not_cross_directory();
   test_rejects_missing_config();
   test_rejects_missing_changes();

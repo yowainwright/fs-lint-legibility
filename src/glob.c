@@ -86,7 +86,7 @@ static bool allocate_rows(legibility_glob_matcher *matcher, size_t max_path_leng
 
 static glob_token read_star_token(const char *pattern, size_t *index) {
   const bool starstar = pattern[*index + 1] == '*';
-  const bool directory = starstar && pattern[*index + 2] == '/';
+  const bool directory = starstar && is_separator(pattern[*index + 2]);
   if (directory) {
     *index += 3;
     return (glob_token){.kind = GLOB_STARSTAR_DIRECTORY};

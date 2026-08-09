@@ -34,6 +34,20 @@ assert_invalid_config(
 )
 
 assert_invalid_config(
+  embedded-nul-default
+  .legibilityrc.json
+  "{\"version\":1,\"newFiles\":{\"default\":\"allow\\u0000junk\"}}"
+  "newFiles.default must be \"allow\" or \"deny\""
+)
+
+assert_invalid_config(
+  embedded-nul-pattern
+  .legibilityrc.json
+  "{\"version\":1,\"newFiles\":{\"allow\":[\"**\\u0000suffix\"]}}"
+  "newFiles.allow must not contain embedded NUL bytes"
+)
+
+assert_invalid_config(
   toml
   .legibilityrc.toml
   "version = 1\n[newFiles]\ndefault = \"deny\"\n"
