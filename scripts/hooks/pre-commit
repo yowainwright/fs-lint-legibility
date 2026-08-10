@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# fs-lint-legibility managed hook
+
+set -euo pipefail
+
+if [[ "${FS_LINT_SKIP_HOOKS:-0}" == "1" ]]; then
+  printf 'pre-commit: skipped by FS_LINT_SKIP_HOOKS\n'
+  exit 0
+fi
+
+FS_LINT_REPO_ROOT="$(git rev-parse --show-toplevel)"
+readonly FS_LINT_REPO_ROOT
+readonly FS_LINT_BUILD_DIR="${FS_LINT_PRE_COMMIT_BUILD_DIR:-$FS_LINT_REPO_ROOT/build-hooks-debug}"
+
+check_staged_format() {
+  local -a fs_lint_sources=()
+  local fs_lint_path
+  while IFS= read -r -d '' fs_lint_path; do
+    [[ ! -f "$fs_lint_path" ]] || fs_lint_sources+=("$fs_lint_path")
+  done < <(git diff --cached --name-only --diff-filter=ACMR -z -- '*.c' '*.h')
+  ((${#fs_lint_sources[@]} == 0)) && return
+
+  command -v clang-format >/dev/null || {
+    printf 'pre-commit: clang-format is required\n' >&2
+    return 1
+  }
+  clang-format --dry-run --Werror "${fs_lint_sources[@]}"
+}
+
+run_debug_tests() {
+  cmake -S "$FS_LINT_REPO_ROOT" -B "$FS_LINT_BUILD_DIR" \
+    -DCMAKE_BUILD_TYPE=Debug \
+    -DCMAKE_C_FLAGS=-Werror
+  cmake --build "$FS_LINT_BUILD_DIR" --parallel
+  ctest --test-dir "$FS_LINT_BUILD_DIR" --output-on-failure
+}
+
+cd "$FS_LINT_REPO_ROOT"
+git diff --cached --check
+check_staged_format
+run_debug_tests

@@ -77,6 +77,25 @@ cmake --build build --target e2e
 cmake --install build --prefix ./dist
 ```
 
+## Development setup
+
+<!-- local Git hooks installed by scripts/setup.sh from scripts/hooks -->
+
+```sh
+./scripts/setup.sh
+```
+
+The setup script installs managed `pre-commit`, `pre-push`, and `post-merge`
+hooks in the repository's Git hook directory, normally `.git/hooks`. It updates
+managed hooks when their checked-in sources change and refuses to overwrite an
+existing unmanaged hook or replace an existing `core.hooksPath` configuration.
+
+The pre-commit hook checks staged whitespace and C formatting, then runs a
+warning-free debug build and the complete test suite. The pre-push hook runs
+release and AddressSanitizer/UndefinedBehaviorSanitizer builds. The post-merge
+hook refreshes managed hooks when their sources change. Set
+`FS_LINT_SKIP_HOOKS=1` for a one-command bypass.
+
 The install contains `bin/fs-lint`, `include/legibility.h`, the static policy
 library, CMake package files, and the project and yyjson MIT licenses. CMake
 consumers can use the exported target directly:

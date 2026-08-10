@@ -6,8 +6,20 @@ Thanks for improving `fs-lint-legibility`.
 
 <!-- build requirements and commands matching CMakeLists.txt and .github/workflows/ci.yml -->
 
-You need CMake 3.20 or newer and a C17 compiler. Build and run the complete
-suite with:
+You need CMake 3.20 or newer and a C17 compiler.
+
+<!-- local Git hooks installed by scripts/setup.sh from scripts/hooks -->
+
+Install the repository's development hooks with:
+
+```sh
+./scripts/setup.sh
+```
+
+This installs the repository's managed commit, push, and post-merge checks.
+Existing unmanaged hooks are left untouched and reported as a setup error.
+
+Build and run the complete suite with:
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug

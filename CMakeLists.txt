@@ -94,6 +94,11 @@ if(BUILD_TESTING)
   target_link_libraries(cli-output-test PRIVATE legibility)
   legibility_enable_warnings(cli-output-test)
   add_test(NAME cli-output COMMAND cli-output-test)
+  add_test(
+    NAME setup-hooks
+    COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/test-setup.sh
+  )
+  set_tests_properties(setup-hooks PROPERTIES LABELS "scripts")
 
   function(add_fs_lint_e2e name)
     set(test_name e2e-${name})
