@@ -1,0 +1,41 @@
+name: Bug Report
+description: Report incorrect policy behavior, crashes, or packaging problems.
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What happened, and what did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: >-
+        Provide the smallest configuration, path change, and command that
+        reproduce the issue.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: behavior_diff
+    attributes:
+      label: Expected behavior diff
+      description: >-
+        Show the smallest observable change from current to expected behavior.
+      render: diff
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Environment
+      description: >-
+        Include fs-lint version, operating system, architecture, and
+        installation method.
+      placeholder: fs-lint 0.1.0, macOS 15 arm64, GitHub release archive
+    validations:
+      required: true

@@ -167,6 +167,12 @@ static bool record_key(const char *name, expected_key *keys, size_t key_count,
   return true;
 }
 
+static bool has_embedded_nul(yyjson_val *value) {
+  const char *string = yyjson_get_str(value);
+  const size_t length = yyjson_get_len(value);
+  return string != NULL && memchr(string, '\0', length) != NULL;
+}
+
 static bool validate_keys(yyjson_val *object, expected_key *keys, size_t key_count,
                           cli_config *config) {
   size_t index;
@@ -175,6 +181,9 @@ static bool validate_keys(yyjson_val *object, expected_key *keys, size_t key_cou
   yyjson_val *value;
   yyjson_obj_foreach(object, index, maximum, key, value) {
     (void)value;
+    if (has_embedded_nul(key)) {
+      return fail(config, "configuration key must not contain embedded NUL bytes");
+    }
     if (!record_key(yyjson_get_str(key), keys, key_count, config)) {
       return false;
     }
@@ -199,12 +208,6 @@ static bool read_version(yyjson_val *root, cli_config *config) {
     return fail(config, "version must be 1");
   }
   return true;
-}
-
-static bool has_embedded_nul(yyjson_val *value) {
-  const char *string = yyjson_get_str(value);
-  const size_t length = yyjson_get_len(value);
-  return string != NULL && memchr(string, '\0', length) != NULL;
 }
 
 static bool read_default(yyjson_val *new_files, cli_config *config) {
