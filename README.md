@@ -22,24 +22,33 @@ allowing established path patterns.
 
 <!-- added-file policy behavior matching src/legibility.c and src/glob.c -->
 
-A one-off file that is not covered by an allow pattern is denied:
+### Avoid one-off files
+
+Prefer extending an established module over adding a bespoke helper file.
+
+#### do / don't
 
 ```diff
-  src/
-  ├── parser.c
-+ └── one-off-helper.c
+- src/one-off-helper.c
++ src/parser.c
 ```
+
+A denied one-off path produces:
 
 ```text
 src/one-off-helper.c: error files/new: new file is not allowed by configuration
 ```
 
-An added path that follows an established shape is allowed. For example,
-`src/**/index.c` permits:
+### Follow established patterns
+
+When `src/**/index.c` is allowed, use that recurring shape instead of inventing
+a neighboring filename.
+
+#### do / don't
 
 ```diff
-  src/widget/
-+ └── index.c
+- src/widget-helper.c
++ src/widget/index.c
 ```
 
 ## Requirements
@@ -277,3 +286,14 @@ Language-support pull requests should:
 
 [Open a pull request](https://github.com/yowainwright/fs-lint-legibility/pulls)
 with one focused integration and a runnable example.
+
+## Other legibility linters
+
+<!-- sibling projects from their public GitHub repositories -->
+
+- [eslint-plugin-legibility](https://github.com/yowainwright/eslint-plugin-legibility)
+- [golangci-lint-legibility](https://github.com/yowainwright/golangci-lint-legibility)
+- [ruff-legibility](https://github.com/yowainwright/ruff-legibility)
+- [sqlfluff-plugin-legibility](https://github.com/yowainwright/sqlfluff-plugin-legibility)
+- [struct-legibility](https://github.com/yowainwright/struct-legibility)
+- [tree-legibility](https://github.com/yowainwright/tree-legibility)
