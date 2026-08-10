@@ -5,7 +5,7 @@
 [![C17](https://img.shields.io/badge/C-17-00599C?logo=c&logoColor=white)](./CMakeLists.txt)
 [![CI](/yowainwright/fs-lint-legibility/actions/workflows/ci.yml/badge.svg)](/yowainwright/fs-lint-legibility/actions/workflows/ci.yml)
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
-[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#language-support)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./.github/CONTRIBUTING.md)
 
 `fs-lint-legibility` is the project and release name; `fs-lint` is its command.
 Most filename linters start by asking what a file should be called. `fs-lint`
@@ -17,6 +17,30 @@ used from Git hooks, CI, editors, and coding agents.
 
 This is an early preview. The first policy denies new files by default while
 allowing established path patterns.
+
+## What it catches
+
+<!-- added-file policy behavior matching src/legibility.c and src/glob.c -->
+
+A one-off file that is not covered by an allow pattern is denied:
+
+```diff
+  src/
+  ├── parser.c
++ └── one-off-helper.c
+```
+
+```text
+src/one-off-helper.c: error files/new: new file is not allowed by configuration
+```
+
+An added path that follows an established shape is allowed. For example,
+`src/**/index.c` permits:
+
+```diff
+  src/widget/
++ └── index.c
+```
 
 ## Requirements
 
@@ -124,6 +148,7 @@ Forward and backward slashes are treated as path separators.
 fs-lint check-path src/new-helper.c
 fs-lint check-path --format json src/new-helper.c
 fs-lint check-path --root . --config .legibilityrc.json src/new-helper.c
+fs-lint check-path -- -new.c
 fs-lint check --staged
 fs-lint check --base origin/main
 git diff --name-only --diff-filter=A --no-renames -z | fs-lint check --stdin0
@@ -141,7 +166,7 @@ Input paths must be normalized and repository-relative. Absolute paths, empty
 segments, trailing separators, and `.` or `..` segments are rejected.
 Git-backed sources produce repository-relative paths even when `--root` names
 a subdirectory. Callers of `check-path` and `check --stdin0` provide paths in
-the same form.
+the same form. Use `--` before a path that starts with a dash.
 
 Exit code `0` allows the path, `1` reports policy violations, and `2` reports
 configuration or usage errors.
@@ -223,9 +248,8 @@ core library.
 A tag matching the compiled version, such as `v0.1.0`, runs the complete test
 suite, installs the release payload, and publishes Linux and macOS archives to
 GitHub. Each archive includes the CLI, library, headers, CMake package files,
-and licenses, with a SHA-256 checksum beside it. GitHub generates release notes
-from merged changes. Project-level changes are tracked in
-[`CHANGELOG.md`](./CHANGELOG.md).
+and licenses, with a SHA-256 checksum and Sigstore attestation bundle beside it.
+GitHub generates release notes from merged changes.
 
 ## Language support
 

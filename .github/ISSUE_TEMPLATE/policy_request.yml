@@ -1,0 +1,38 @@
+name: Policy Request
+description: Propose a new policy or a behavior change to an existing policy.
+title: "policy: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: >-
+        What unnecessary or inconsistent filesystem change should fs-lint
+        detect?
+    validations:
+      required: true
+  - type: textarea
+    id: denied
+    attributes:
+      label: Change that should be denied
+      description: Show a minimal repository-tree or configuration diff.
+      render: diff
+    validations:
+      required: true
+  - type: textarea
+    id: allowed
+    attributes:
+      label: Change that should be allowed
+      description: Show the corresponding acceptable diff.
+      render: diff
+    validations:
+      required: true
+  - type: textarea
+    id: configuration
+    attributes:
+      label: Configuration
+      description: >-
+        Describe proposed keys, defaults, limits, and compatibility behavior.
+    validations:
+      required: false

@@ -48,6 +48,20 @@ assert_invalid_config(
 )
 
 assert_invalid_config(
+  embedded-nul-root-key
+  .legibilityrc.json
+  "{\"version\\u0000junk\":1,\"newFiles\":{\"default\":\"allow\"}}"
+  "configuration key must not contain embedded NUL bytes"
+)
+
+assert_invalid_config(
+  embedded-nul-new-files-key
+  .legibilityrc.json
+  "{\"version\":1,\"newFiles\":{\"default\\u0000junk\":\"allow\"}}"
+  "configuration key must not contain embedded NUL bytes"
+)
+
+assert_invalid_config(
   toml
   .legibilityrc.toml
   "version = 1\n[newFiles]\ndefault = \"deny\"\n"
