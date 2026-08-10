@@ -22,7 +22,7 @@ typedef struct {
 
 static void print_usage(FILE *stream) {
   fputs("usage: fs-lint check-path [--root path] [--config path] "
-        "[--format text|json] <path>\n",
+        "[--format text|json] [--] <path>\n",
         stream);
   fputs("usage: fs-lint check (--stdin0|--staged|--base ref) [--root path] "
         "[--config path] [--format text|json]\n",
@@ -148,8 +148,16 @@ static bool assign_path(const char *path, size_t *index, cli_arguments *argument
   return true;
 }
 
-static bool parse_token(int argc, char **argv, size_t *index,
+static bool parse_token(int argc, char **argv, size_t *index, bool *options_ended,
                         cli_arguments *arguments) {
+  if (*options_ended) {
+    return assign_path(argv[*index], index, arguments);
+  }
+  if (strcmp(argv[*index], "--") == 0) {
+    *options_ended = true;
+    *index += 1;
+    return true;
+  }
   const bool is_option = argv[*index][0] == '-';
   if (is_option) {
     return parse_option(argc, argv, index, arguments);
@@ -192,8 +200,9 @@ static bool parse_arguments(int argc, char **argv, cli_arguments *arguments) {
     return false;
   }
   size_t index = 2;
+  bool options_ended = false;
   while (index < (size_t)argc) {
-    if (!parse_token(argc, argv, &index, arguments)) {
+    if (!parse_token(argc, argv, &index, &options_ended, arguments)) {
       return false;
     }
   }

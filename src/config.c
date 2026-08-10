@@ -201,13 +201,19 @@ static bool read_version(yyjson_val *root, cli_config *config) {
   return true;
 }
 
+static bool has_embedded_nul(yyjson_val *value) {
+  const char *string = yyjson_get_str(value);
+  const size_t length = yyjson_get_len(value);
+  return string != NULL && memchr(string, '\0', length) != NULL;
+}
+
 static bool read_default(yyjson_val *new_files, cli_config *config) {
   yyjson_val *value = yyjson_obj_get(new_files, "default");
   if (value == NULL) {
     return true;
   }
   const char *setting = yyjson_get_str(value);
-  if (setting == NULL) {
+  if (setting == NULL || has_embedded_nul(value)) {
     return fail(config, "newFiles.default must be \"allow\" or \"deny\"");
   }
   if (strcmp(setting, "deny") == 0) {
@@ -251,6 +257,9 @@ static bool copy_pattern(yyjson_val *value, size_t index, size_t *total,
   const char *pattern = yyjson_get_str(value);
   if (pattern == NULL) {
     return fail(config, "newFiles.allow must contain only strings");
+  }
+  if (has_embedded_nul(value)) {
+    return fail(config, "newFiles.allow must not contain embedded NUL bytes");
   }
   if (!add_pattern_size(pattern, total, config)) {
     return false;

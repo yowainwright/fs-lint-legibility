@@ -10,7 +10,7 @@ string(
   expected_error
   "usage: fs-lint check-path "
   "[--root path] [--config path] "
-  "[--format text|json] <path>\n"
+  "[--format text|json] [--] <path>\n"
   "usage: fs-lint check (--stdin0|--staged|--base ref) "
   "[--root path] [--config path] "
   "[--format text|json]\n"

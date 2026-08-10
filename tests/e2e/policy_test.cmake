@@ -27,6 +27,31 @@ if(NOT output STREQUAL expected)
   message(FATAL_ERROR "unexpected output: ${output}")
 endif()
 
+execute_process(
+  COMMAND "${FS_LINT}" check-path -- -new.c
+  WORKING_DIRECTORY "${TEST_ROOT}"
+  RESULT_VARIABLE dash_path_status
+  OUTPUT_VARIABLE dash_path_output
+  ERROR_VARIABLE dash_path_error
+)
+
+set(
+  expected_dash_path
+  "-new.c: error files/new: new file is not allowed by configuration\n"
+)
+
+if(NOT dash_path_status EQUAL 1)
+  message(FATAL_ERROR "expected dash-prefixed path exit code 1")
+endif()
+
+if(NOT dash_path_output STREQUAL expected_dash_path)
+  message(FATAL_ERROR "unexpected dash-prefixed path output: ${dash_path_output}")
+endif()
+
+if(NOT dash_path_error STREQUAL "")
+  message(FATAL_ERROR "expected empty dash-prefixed path stderr: ${dash_path_error}")
+endif()
+
 file(
   WRITE
   "${TEST_ROOT}/.legibilityrc.json"
