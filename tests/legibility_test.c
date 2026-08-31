@@ -137,6 +137,20 @@ static void test_rejects_missing_brace_alternative(void) {
   }
 }
 
+static void test_allows_large_brace_product_without_expansion_limit(void) {
+  const char *allow_patterns[] = {
+      "src/{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}.c"};
+  const legibility_config config = {
+      .allow_patterns = allow_patterns,
+      .allow_pattern_count = 1,
+  };
+  captured_diagnostics captured = {0};
+  const legibility_status status = check(&config, "src/aaaaaaaaaaaaa.c", &captured);
+  if (status != LEGIBILITY_STATUS_OK || captured.count != 0) {
+    fail("expected large brace products to be matched lazily");
+  }
+}
+
 static void test_negated_pattern_denies_allowed_path(void) {
   const char *allow_patterns[] = {"src/**/*.c", "!src/**/*.generated.c"};
   const legibility_config config = {
@@ -317,6 +331,7 @@ int main(void) {
   test_star_does_not_cross_directory();
   test_allows_brace_alternatives();
   test_rejects_missing_brace_alternative();
+  test_allows_large_brace_product_without_expansion_limit();
   test_negated_pattern_denies_allowed_path();
   test_negated_pattern_denies_default_allow();
   test_rejects_missing_config();

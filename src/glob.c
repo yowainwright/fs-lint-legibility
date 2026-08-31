@@ -4,8 +4,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define GLOB_MAX_EXPANDED_PATTERNS 4096
-
 typedef enum {
   GLOB_LITERAL,
   GLOB_QUESTION,
@@ -20,27 +18,16 @@ typedef struct {
 } glob_token;
 
 typedef struct {
-  size_t offset;
-  size_t count;
-  bool negated;
-} glob_pattern;
-
-typedef struct {
   char *text;
   bool negated;
-} expanded_pattern;
-
-typedef struct {
-  expanded_pattern *items;
-  size_t count;
-  size_t capacity;
-} expanded_patterns;
+} glob_pattern;
 
 struct legibility_glob_matcher {
   glob_pattern *patterns;
   glob_token *tokens;
   bool *rows;
   size_t pattern_count;
+  size_t token_capacity;
   size_t row_width;
 };
 
@@ -58,48 +45,6 @@ static char *copy_pattern_text(const char *pattern) {
     memcpy(copy, pattern, size);
   }
   return copy;
-}
-
-static bool grow_expanded_patterns(expanded_patterns *patterns) {
-  const size_t doubled = patterns->capacity * 2;
-  size_t capacity = patterns->capacity == 0 ? 8 : doubled;
-  capacity =
-      capacity > GLOB_MAX_EXPANDED_PATTERNS ? GLOB_MAX_EXPANDED_PATTERNS : capacity;
-  expanded_pattern *items = realloc(patterns->items, capacity * sizeof(*items));
-  if (items == NULL) {
-    return false;
-  }
-  patterns->items = items;
-  patterns->capacity = capacity;
-  return true;
-}
-
-static bool append_expanded_pattern(expanded_patterns *patterns, const char *text,
-                                    bool negated) {
-  if (patterns->count == GLOB_MAX_EXPANDED_PATTERNS) {
-    return false;
-  }
-  const bool full = patterns->count == patterns->capacity;
-  if (full && !grow_expanded_patterns(patterns)) {
-    return false;
-  }
-  char *copy = copy_pattern_text(text);
-  if (copy == NULL) {
-    return false;
-  }
-  patterns->items[patterns->count] = (expanded_pattern){
-      .text = copy,
-      .negated = negated,
-  };
-  patterns->count += 1;
-  return true;
-}
-
-static void free_expanded_patterns(expanded_patterns *patterns) {
-  for (size_t index = 0; index < patterns->count; index += 1) {
-    free(patterns->items[index].text);
-  }
-  free(patterns->items);
 }
 
 static bool find_brace_group(const char *pattern, size_t *open, size_t *close) {
@@ -139,72 +84,6 @@ static char *join_alternative(const char *pattern, size_t open, size_t close,
   return joined;
 }
 
-static bool expand_pattern(expanded_patterns *patterns, const char *pattern,
-                           bool negated);
-
-static bool expand_alternative(expanded_patterns *patterns, const char *pattern,
-                               bool negated, size_t open, size_t close, size_t start,
-                               size_t end) {
-  char *joined = join_alternative(pattern, open, close, start, end);
-  const bool expanded = joined != NULL && expand_pattern(patterns, joined, negated);
-  free(joined);
-  return expanded;
-}
-
-static bool expand_brace_group(expanded_patterns *patterns, const char *pattern,
-                               bool negated, size_t open, size_t close) {
-  size_t depth = 0;
-  size_t start = open + 1;
-  for (size_t index = start; index <= close; index += 1) {
-    depth += pattern[index] == '{' ? 1 : 0;
-    depth -= pattern[index] == '}' && depth > 0 ? 1 : 0;
-    const bool separator = pattern[index] == ',' && depth == 0;
-    const bool last = index == close;
-    if ((separator || last) &&
-        !expand_alternative(patterns, pattern, negated, open, close, start, index)) {
-      return false;
-    }
-    start = separator ? index + 1 : start;
-  }
-  return true;
-}
-
-static bool expand_pattern(expanded_patterns *patterns, const char *pattern,
-                           bool negated) {
-  size_t open;
-  size_t close;
-  if (!find_brace_group(pattern, &open, &close)) {
-    return append_expanded_pattern(patterns, pattern, negated);
-  }
-  return expand_brace_group(patterns, pattern, negated, open, close);
-}
-
-static bool expand_input_patterns(const char *const *inputs, size_t count,
-                                  expanded_patterns *patterns) {
-  memset(patterns, 0, sizeof(*patterns));
-  for (size_t index = 0; index < count; index += 1) {
-    const bool negated = inputs[index][0] == '!';
-    const char *pattern = negated ? inputs[index] + 1 : inputs[index];
-    if (!expand_pattern(patterns, pattern, negated)) {
-      free_expanded_patterns(patterns);
-      return false;
-    }
-  }
-  return true;
-}
-
-static bool count_token_capacity(const expanded_patterns *patterns, size_t *capacity) {
-  *capacity = 0;
-  for (size_t index = 0; index < patterns->count; index += 1) {
-    const size_t length = strlen(patterns->items[index].text);
-    if (length > SIZE_MAX - *capacity) {
-      return false;
-    }
-    *capacity += length;
-  }
-  return true;
-}
-
 static void *allocate_items(size_t count, size_t item_size) {
   if (count == 0) {
     return NULL;
@@ -223,6 +102,34 @@ static bool allocate_pattern_storage(legibility_glob_matcher *matcher,
   }
   matcher->tokens = allocate_items(token_capacity, sizeof(*matcher->tokens));
   return token_capacity == 0 || matcher->tokens != NULL;
+}
+
+static bool copy_input_patterns(legibility_glob_matcher *matcher,
+                                const char *const *patterns, size_t pattern_count) {
+  for (size_t index = 0; index < pattern_count; index += 1) {
+    const bool negated = patterns[index][0] == '!';
+    const char *text = negated ? patterns[index] + 1 : patterns[index];
+    matcher->patterns[index] = (glob_pattern){
+        .text = copy_pattern_text(text),
+        .negated = negated,
+    };
+    if (matcher->patterns[index].text == NULL) {
+      return false;
+    }
+  }
+  return true;
+}
+
+static bool find_token_capacity(const char *const *patterns, size_t pattern_count,
+                                size_t *capacity) {
+  *capacity = 0;
+  for (size_t index = 0; index < pattern_count; index += 1) {
+    const bool negated = patterns[index][0] == '!';
+    const char *text = negated ? patterns[index] + 1 : patterns[index];
+    const size_t length = strlen(text);
+    *capacity = length > *capacity ? length : *capacity;
+  }
+  return true;
 }
 
 static bool allocate_rows(legibility_glob_matcher *matcher, size_t max_path_length) {
@@ -275,23 +182,6 @@ static size_t compile_pattern(const char *pattern, glob_token *tokens) {
     token_count += 1;
   }
   return token_count;
-}
-
-static void compile_patterns(legibility_glob_matcher *matcher,
-                             const expanded_patterns *patterns) {
-  size_t token_offset = 0;
-  for (size_t index = 0; index < matcher->pattern_count; index += 1) {
-    glob_token *destination =
-        matcher->tokens == NULL ? NULL : matcher->tokens + token_offset;
-    const expanded_pattern source = patterns->items[index];
-    const size_t count = compile_pattern(source.text, destination);
-    matcher->patterns[index] = (glob_pattern){
-        .offset = token_offset,
-        .count = count,
-        .negated = source.negated,
-    };
-    token_offset += count;
-  }
 }
 
 static bool token_matches(glob_token token, char path) {
@@ -358,20 +248,70 @@ static void fill_row(glob_token token, const char *path, size_t path_length,
   fill_character_row(token, path, path_length, next, current);
 }
 
-static bool matches_pattern(legibility_glob_matcher *matcher, glob_pattern pattern,
-                            const char *path, size_t path_length) {
+static bool matches_tokens(legibility_glob_matcher *matcher, size_t token_count,
+                           const char *path, size_t path_length) {
   bool *next = matcher->rows;
   bool *current = matcher->rows + matcher->row_width;
   memset(next, 0, matcher->row_width * sizeof(*next));
   next[path_length] = true;
-  for (size_t cursor = pattern.count; cursor > 0; cursor -= 1) {
-    const glob_token token = matcher->tokens[pattern.offset + cursor - 1];
+  for (size_t cursor = token_count; cursor > 0; cursor -= 1) {
+    const glob_token token = matcher->tokens[cursor - 1];
     fill_row(token, path, path_length, next, current);
     bool *swap = next;
     next = current;
     current = swap;
   }
   return next[0];
+}
+
+static bool matches_pattern_text(legibility_glob_matcher *matcher, const char *pattern,
+                                 const char *path, size_t path_length);
+
+static bool matches_alternative(legibility_glob_matcher *matcher, const char *pattern,
+                                const char *path, size_t path_length, size_t open,
+                                size_t close, size_t start, size_t end) {
+  char *joined = join_alternative(pattern, open, close, start, end);
+  const bool matched =
+      joined != NULL && matches_pattern_text(matcher, joined, path, path_length);
+  free(joined);
+  return matched;
+}
+
+static bool matches_brace_group(legibility_glob_matcher *matcher, const char *pattern,
+                                const char *path, size_t path_length, size_t open,
+                                size_t close) {
+  size_t depth = 0;
+  size_t start = open + 1;
+  for (size_t index = start; index <= close; index += 1) {
+    depth += pattern[index] == '{' ? 1 : 0;
+    depth -= pattern[index] == '}' && depth > 0 ? 1 : 0;
+    const bool separator = pattern[index] == ',' && depth == 0;
+    const bool last = index == close;
+    const bool matched =
+        (separator || last) && matches_alternative(matcher, pattern, path, path_length,
+                                                   open, close, start, index);
+    if (matched) {
+      return true;
+    }
+    start = separator ? index + 1 : start;
+  }
+  return false;
+}
+
+static bool matches_pattern_text(legibility_glob_matcher *matcher, const char *pattern,
+                                 const char *path, size_t path_length) {
+  size_t open;
+  size_t close;
+  if (find_brace_group(pattern, &open, &close)) {
+    return matches_brace_group(matcher, pattern, path, path_length, open, close);
+  }
+  const size_t token_count = compile_pattern(pattern, matcher->tokens);
+  return matches_tokens(matcher, token_count, path, path_length);
+}
+
+static bool matches_pattern(legibility_glob_matcher *matcher, glob_pattern pattern,
+                            const char *path, size_t path_length) {
+  return matches_pattern_text(matcher, pattern.text, path, path_length);
 }
 
 static legibility_glob_matcher *
@@ -381,6 +321,7 @@ allocate_matcher(size_t pattern_count, size_t token_capacity, size_t max_path_le
     return NULL;
   }
   matcher->pattern_count = pattern_count;
+  matcher->token_capacity = token_capacity;
   const bool storage_ready =
       allocate_pattern_storage(matcher, pattern_count, token_capacity);
   const bool rows_ready = storage_ready && allocate_rows(matcher, max_path_length);
@@ -394,23 +335,19 @@ allocate_matcher(size_t pattern_count, size_t token_capacity, size_t max_path_le
 legibility_glob_matcher *legibility_glob_matcher_create(const char *const *patterns,
                                                         size_t pattern_count,
                                                         size_t max_path_length) {
-  expanded_patterns expanded;
-  if (!expand_input_patterns(patterns, pattern_count, &expanded)) {
-    return NULL;
-  }
   size_t token_capacity;
-  if (!count_token_capacity(&expanded, &token_capacity)) {
-    free_expanded_patterns(&expanded);
+  if (!find_token_capacity(patterns, pattern_count, &token_capacity)) {
     return NULL;
   }
   legibility_glob_matcher *matcher =
-      allocate_matcher(expanded.count, token_capacity, max_path_length);
+      allocate_matcher(pattern_count, token_capacity, max_path_length);
   if (matcher == NULL) {
-    free_expanded_patterns(&expanded);
     return NULL;
   }
-  compile_patterns(matcher, &expanded);
-  free_expanded_patterns(&expanded);
+  if (!copy_input_patterns(matcher, patterns, pattern_count)) {
+    legibility_glob_matcher_destroy(matcher);
+    return NULL;
+  }
   return matcher;
 }
 
@@ -432,6 +369,9 @@ void legibility_glob_matcher_destroy(legibility_glob_matcher *matcher) {
   }
   free(matcher->rows);
   free(matcher->tokens);
+  for (size_t index = 0; index < matcher->pattern_count; index += 1) {
+    free(matcher->patterns[index].text);
+  }
   free(matcher->patterns);
   free(matcher);
 }

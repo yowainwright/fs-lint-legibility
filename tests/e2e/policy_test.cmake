@@ -118,3 +118,28 @@ endif()
 if(NOT pattern_output STREQUAL "" OR NOT pattern_error STREQUAL "")
   message(FATAL_ERROR "expected allow pattern to produce no output")
 endif()
+
+string(
+  CONCAT
+  large_brace_config
+  "{\"version\":1,"
+  "\"newFiles\":{\"default\":\"deny\","
+  "\"allow\":[\"src/{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}.c\"]}}"
+)
+file(WRITE "${TEST_ROOT}/.legibilityrc.json" "${large_brace_config}")
+
+execute_process(
+  COMMAND "${FS_LINT}" check-path src/aaaaaaaaaaaaa.c
+  WORKING_DIRECTORY "${TEST_ROOT}"
+  RESULT_VARIABLE large_brace_status
+  OUTPUT_VARIABLE large_brace_output
+  ERROR_VARIABLE large_brace_error
+)
+
+if(NOT large_brace_status EQUAL 0)
+  message(FATAL_ERROR "expected large brace product to exit 0: ${large_brace_error}")
+endif()
+
+if(NOT large_brace_output STREQUAL "" OR NOT large_brace_error STREQUAL "")
+  message(FATAL_ERROR "expected large brace product to produce no output")
+endif()
