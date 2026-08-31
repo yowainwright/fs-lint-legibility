@@ -37,14 +37,31 @@ string(
   CONCAT
   readme_config
   "{\"version\":1,\"newFiles\":{\"default\":\"deny\","
-  "\"allow\":[\"README.md\",\"src/**/index.c\",\"**/*.test.c\"]}}"
+  "\"allow\":[\"README.md\",\"src/**/index.c\",\"src/**/*.{c,h}\","
+  "\"packages/*/{src,tests}/**/*.{js,ts,tsx}\","
+  "\"!**/*.generated.*\"]}}"
 )
 write_config("${readme_config}")
 assert_path(README.md 0 "")
 assert_path(src/index.c 0 "")
 assert_path(src/ui/index.c 0 "")
-assert_path(tests/widget.test.c 0 "")
-assert_path(src/new-helper.c 1 "${denied}")
+assert_path(src/parser.c 0 "")
+assert_path(src/parser.h 0 "")
+assert_path(packages/cli/src/index.js 0 "")
+assert_path(packages/cli/tests/index.test.ts 0 "")
+assert_path(packages/ui/src/Button.tsx 0 "")
+
+set(
+  readme_denied
+  "tools/new-helper.py: error files/new: new file is not allowed by configuration\n"
+)
+assert_path(tools/new-helper.py 1 "${readme_denied}")
+
+set(
+  readme_generated_denied
+  "src/schema.generated.c: error files/new: new file is not allowed by configuration\n"
+)
+assert_path(src/schema.generated.c 1 "${readme_generated_denied}")
 
 string(
   CONCAT
@@ -76,8 +93,9 @@ string(
   CONCAT
   language_config
   "{\"version\":1,\"newFiles\":{\"allow\":["
-  "\"native/**/*.c\",\"native/**/*.cpp\",\"crates/**/*.rs\","
-  "\"cmd/**/*.go\",\"packages/**/*.js\",\"tools/**/*.py\"]}}"
+  "\"native/**/*.{c,cpp}\",\"crates/**/*.rs\","
+  "\"cmd/**/*.go\",\"packages/*/{src,tests}/**/*.{js,ts,tsx}\","
+  "\"tools/**/*.py\",\"!**/*.generated.*\"]}}"
 )
 write_config("${language_config}")
 assert_path(native/main.c 0 "")
@@ -85,4 +103,12 @@ assert_path(native/main.cpp 0 "")
 assert_path(crates/fs/src/lib.rs 0 "")
 assert_path(cmd/fs-lint/main.go 0 "")
 assert_path(packages/cli/src/index.js 0 "")
+assert_path(packages/cli/tests/index.test.ts 0 "")
+assert_path(packages/ui/src/Button.tsx 0 "")
 assert_path(tools/release.py 0 "")
+
+set(
+  generated_denied
+  "packages/cli/src/schema.generated.ts: error files/new: new file is not allowed by configuration\n"
+)
+assert_path(packages/cli/src/schema.generated.ts 1 "${generated_denied}")

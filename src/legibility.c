@@ -139,7 +139,7 @@ static legibility_glob_matcher *create_matcher(const legibility_config *config,
                                         config->allow_pattern_count, max_path_length);
 }
 
-static bool check_changes(legibility_glob_matcher *matcher,
+static bool check_changes(legibility_glob_matcher *matcher, bool default_allowed,
                           const legibility_change *changes, size_t change_count,
                           legibility_reporter reporter, void *user_data) {
   bool found_violation = false;
@@ -148,8 +148,11 @@ static bool check_changes(legibility_glob_matcher *matcher,
     if (!added) {
       continue;
     }
-    const bool allowed = matcher != NULL &&
-                         legibility_glob_matcher_matches(matcher, changes[index].path);
+    bool allowed = default_allowed;
+    if (matcher != NULL) {
+      allowed =
+          legibility_glob_matcher_allows(matcher, changes[index].path, default_allowed);
+    }
     if (allowed) {
       continue;
     }
@@ -165,6 +168,7 @@ static legibility_status check_denied_additions(const legibility_config *config,
                                                 size_t change_count,
                                                 legibility_reporter reporter,
                                                 void *user_data) {
+  const bool default_allowed = config->new_files_default == LEGIBILITY_NEW_FILES_ALLOW;
   legibility_glob_matcher *matcher = create_matcher(config, changes, change_count);
   const bool allocation_failed = config->allow_pattern_count > 0 && matcher == NULL;
   if (allocation_failed) {
@@ -172,7 +176,8 @@ static legibility_status check_denied_additions(const legibility_config *config,
                  user_data);
     return LEGIBILITY_STATUS_ERROR;
   }
-  const bool found = check_changes(matcher, changes, change_count, reporter, user_data);
+  const bool found = check_changes(matcher, default_allowed, changes, change_count,
+                                   reporter, user_data);
   legibility_glob_matcher_destroy(matcher);
   return found ? LEGIBILITY_STATUS_VIOLATIONS : LEGIBILITY_STATUS_OK;
 }
@@ -186,9 +191,10 @@ legibility_status legibility_check(const legibility_config *config,
     report_error("input/invalid", "", input_error, reporter, user_data);
     return LEGIBILITY_STATUS_ERROR;
   }
-  const bool permits_additions =
-      config->new_files_default == LEGIBILITY_NEW_FILES_ALLOW;
-  if (permits_additions || change_count == 0) {
+  const bool unconditional_allow =
+      config->new_files_default == LEGIBILITY_NEW_FILES_ALLOW &&
+      config->allow_pattern_count == 0;
+  if (unconditional_allow || change_count == 0) {
     return LEGIBILITY_STATUS_OK;
   }
   return check_denied_additions(config, changes, change_count, reporter, user_data);

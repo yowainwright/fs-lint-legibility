@@ -109,6 +109,108 @@ static void test_star_does_not_cross_directory(void) {
   }
 }
 
+static void test_allows_brace_alternatives(void) {
+  const char *allow_patterns[] = {"packages/*/{src,tests}/**/*.{ts,tsx}"};
+  const legibility_config config = {
+      .allow_patterns = allow_patterns,
+      .allow_pattern_count = 1,
+  };
+  captured_diagnostics captured = {0};
+  const legibility_status status =
+      check(&config, "packages/core/src/index.ts", &captured);
+  if (status != LEGIBILITY_STATUS_OK || captured.count != 0) {
+    fail("expected brace alternatives to allow grouped directories and extensions");
+  }
+}
+
+static void test_rejects_missing_brace_alternative(void) {
+  const char *allow_patterns[] = {"packages/*/{src,tests}/**/*.{ts,tsx}"};
+  const legibility_config config = {
+      .allow_patterns = allow_patterns,
+      .allow_pattern_count = 1,
+  };
+  captured_diagnostics captured = {0};
+  const legibility_status status =
+      check(&config, "packages/core/docs/index.ts", &captured);
+  if (status != LEGIBILITY_STATUS_VIOLATIONS || captured.count != 1) {
+    fail("expected paths outside brace alternatives to be denied");
+  }
+}
+
+static void test_allows_large_brace_product_without_expansion_limit(void) {
+  const char *allow_patterns[] = {"src/"
+                                  "{a,aa}{a,aa}{a,aa}{a,aa}{a,aa}{a,aa}{a,aa}{a,aa}{a,"
+                                  "aa}{a,aa}{a,aa}{a,aa}{a,aa}.c"};
+  const legibility_config config = {
+      .allow_patterns = allow_patterns,
+      .allow_pattern_count = 1,
+  };
+  captured_diagnostics captured = {0};
+  const legibility_status status = check(&config, "src/aaaaaaaaaaaaa.c", &captured);
+  if (status != LEGIBILITY_STATUS_OK || captured.count != 0) {
+    fail("expected large brace products to be matched lazily");
+  }
+}
+
+static void test_rejects_large_brace_product_without_exponential_work(void) {
+  const char *allow_patterns[] = {"src/"
+                                  "{a,aa}{a,aa}{a,aa}{a,aa}{a,aa}{a,aa}{a,aa}{a,aa}{a,"
+                                  "aa}{a,aa}{a,aa}{a,aa}{a,aa}.c"};
+  const legibility_config config = {
+      .allow_patterns = allow_patterns,
+      .allow_pattern_count = 1,
+  };
+  captured_diagnostics captured = {0};
+  const legibility_status status = check(&config, "src/aaaaaaaaaaaaa.txt", &captured);
+  if (status != LEGIBILITY_STATUS_VIOLATIONS || captured.count != 1) {
+    fail("expected large brace nonmatches to be rejected without matcher errors");
+  }
+}
+
+static void test_rejects_wildcard_brace_product_without_exponential_work(void) {
+  const char *allow_patterns[] = {"src/"
+                                  "{a*,aa*}{a*,aa*}{a*,aa*}{a*,aa*}{a*,aa*}{a*,aa*}{a*,"
+                                  "aa*}{a*,aa*}.c"};
+  const legibility_config config = {
+      .allow_patterns = allow_patterns,
+      .allow_pattern_count = 1,
+  };
+  captured_diagnostics captured = {0};
+  const legibility_status status = check(&config, "src/aaaaaaaaaaaaa.txt", &captured);
+  if (status != LEGIBILITY_STATUS_VIOLATIONS || captured.count != 1) {
+    fail("expected wildcard brace nonmatches to be rejected without matcher errors");
+  }
+}
+
+static void test_negated_pattern_denies_allowed_path(void) {
+  const char *allow_patterns[] = {"src/**/*.c", "!src/**/*.generated.c"};
+  const legibility_config config = {
+      .allow_patterns = allow_patterns,
+      .allow_pattern_count = 2,
+  };
+  captured_diagnostics captured = {0};
+  const legibility_status status =
+      check(&config, "src/api/client.generated.c", &captured);
+  if (status != LEGIBILITY_STATUS_VIOLATIONS || captured.count != 1) {
+    fail("expected negated allow pattern to deny a matching path");
+  }
+}
+
+static void test_negated_pattern_denies_default_allow(void) {
+  const char *allow_patterns[] = {"!src/**/*.generated.c"};
+  const legibility_config config = {
+      .new_files_default = LEGIBILITY_NEW_FILES_ALLOW,
+      .allow_patterns = allow_patterns,
+      .allow_pattern_count = 1,
+  };
+  captured_diagnostics captured = {0};
+  const legibility_status status =
+      check(&config, "src/api/client.generated.c", &captured);
+  if (status != LEGIBILITY_STATUS_VIOLATIONS || captured.count != 1) {
+    fail("expected negated allow pattern to deny despite default allow");
+  }
+}
+
 static void test_rejects_missing_config(void) {
   captured_diagnostics captured = {0};
   const legibility_status status = legibility_check(NULL, NULL, 0, capture, &captured);
@@ -258,6 +360,13 @@ int main(void) {
   test_allows_globstar_without_directory();
   test_allows_backslash_globstar_without_directory();
   test_star_does_not_cross_directory();
+  test_allows_brace_alternatives();
+  test_rejects_missing_brace_alternative();
+  test_allows_large_brace_product_without_expansion_limit();
+  test_rejects_large_brace_product_without_exponential_work();
+  test_rejects_wildcard_brace_product_without_exponential_work();
+  test_negated_pattern_denies_allowed_path();
+  test_negated_pattern_denies_default_allow();
   test_rejects_missing_config();
   test_rejects_missing_changes();
   test_rejects_missing_path();

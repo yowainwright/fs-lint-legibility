@@ -1,3 +1,6 @@
+unset(ENV{GIT_DIR})
+unset(ENV{GIT_WORK_TREE})
+unset(ENV{GIT_INDEX_FILE})
 set(ENV{GIT_CONFIG_NOSYSTEM} "1")
 set(ENV{GIT_CONFIG_GLOBAL} "${TEST_ROOT}/gitconfig")
 set(ENV{GIT_TEMPLATE_DIR} "${TEST_ROOT}/git-template")
