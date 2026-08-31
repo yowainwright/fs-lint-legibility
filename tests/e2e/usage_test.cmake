@@ -58,7 +58,7 @@ if(NOT version_status EQUAL 0)
   message(FATAL_ERROR "expected version exit code 0, received ${version_status}")
 endif()
 
-if(NOT version_output STREQUAL "fs-lint 0.1.0\n")
+if(NOT version_output STREQUAL "fs-lint 0.2.0\n")
   message(FATAL_ERROR "unexpected version output: ${version_output}")
 endif()
 

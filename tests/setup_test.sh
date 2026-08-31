@@ -11,49 +11,80 @@ fail() {
   exit 1
 }
 
-mkdir -p "$repo/scripts"
-cp "$source_root/scripts/setup.sh" "$repo/scripts/setup.sh"
-git -C "$repo" init -q
+run_setup() {
+  label="${1:?}"
+  setup_output="$("$repo/scripts/setup.sh" 2>&1)" ||
+    fail "$label failed: $setup_output"
+}
 
-"$repo/scripts/setup.sh" >/dev/null
-for name in pre-commit pre-push post-merge; do
-  hook="$repo/.git/hooks/$name"
-  [ -x "$hook" ] || fail "$name is not executable"
-  [ "$(wc -l <"$hook")" -eq 4 ] || fail "$name is not a small wrapper"
-done
+reject_setup() {
+  label="${1:?}"
+  setup_output="$("$repo/scripts/setup.sh" 2>&1)" &&
+    fail "$label was accepted"
+  return 0
+}
 
-output="$("$repo/scripts/setup.sh")"
-[ -z "$output" ] || fail "repeat setup is not quiet"
+setup_repo() {
+  mkdir -p "$repo/scripts"
+  cp "$source_root/scripts/setup.sh" "$repo/scripts/setup.sh"
+  git -C "$repo" init -q
+  marker="# fs-lint-legibility managed hook"
+}
 
-marker="# fs-lint-legibility managed hook"
-printf '#!/bin/sh\n%s\nexit 1\n' "$marker" >"$repo/.git/hooks/pre-commit"
-"$repo/scripts/setup.sh" >/dev/null
-grep -Fq 'scripts/setup.sh" "pre-commit"' "$repo/.git/hooks/pre-commit" ||
-  fail "managed hook was not updated"
+assert_initial_install() {
+  printf '#!/bin/sh\n%s\nexit 0\n' "$marker" >"$repo/.git/hooks/post-merge"
+  run_setup "initial setup"
+  [ ! -e "$repo/.git/hooks/post-merge" ] ||
+    fail "obsolete managed hook was not removed"
+  for name in pre-commit pre-push; do
+    hook="$repo/.git/hooks/$name"
+    [ -x "$hook" ] || fail "$name is not executable"
+    [ "$(wc -l <"$hook")" -eq 4 ] || fail "$name is not a small wrapper"
+  done
+}
 
-printf '#!/bin/sh\nexit 0\n' >"$repo/.git/hooks/pre-commit"
-if "$repo/scripts/setup.sh" >/dev/null 2>&1; then
-  fail "unmanaged hook was accepted"
-fi
-grep -Fq 'exit 0' "$repo/.git/hooks/pre-commit" || fail "unmanaged hook was changed"
+assert_repeat_setup_is_quiet() {
+  run_setup "repeat setup"
+  [ -z "$setup_output" ] || fail "repeat setup is not quiet"
+}
 
-external="$test_root/external-hook"
-printf '%s\n' "$marker" >"$external"
-rm "$repo/.git/hooks/pre-commit"
-ln -s "$external" "$repo/.git/hooks/pre-commit"
-if "$repo/scripts/setup.sh" >/dev/null 2>&1; then
-  fail "symlink hook was accepted"
-fi
-[ -L "$repo/.git/hooks/pre-commit" ] || fail "symlink hook was replaced"
+assert_managed_hook_updates() {
+  printf '#!/bin/sh\n%s\nexit 1\n' "$marker" >"$repo/.git/hooks/pre-commit"
+  run_setup "managed hook update"
+  grep -Fq 'scripts/setup.sh" "pre-commit"' "$repo/.git/hooks/pre-commit" ||
+    fail "managed hook was not updated"
+}
 
-output="$(FS_LINT_SKIP_HOOKS=1 "$repo/scripts/setup.sh" post-merge 2>&1)"
-[ -z "$output" ] || fail "skipped post-merge produced output"
+assert_unmanaged_hook_is_preserved() {
+  printf '#!/bin/sh\nexit 0\n' >"$repo/.git/hooks/pre-commit"
+  reject_setup "unmanaged hook"
+  grep -Fq 'exit 0' "$repo/.git/hooks/pre-commit" ||
+    fail "unmanaged hook was changed"
+}
 
-git -C "$repo" config core.hooksPath custom-hooks
-output="$("$repo/scripts/setup.sh" post-merge 2>&1)"
-[ -z "$output" ] || fail "custom hook path made post-merge noisy"
-if "$repo/scripts/setup.sh" >/dev/null 2>&1; then
-  fail "setup accepted a custom hook path"
-fi
+assert_symlink_hook_is_preserved() {
+  external="$test_root/external-hook"
+  printf '%s\n' "$marker" >"$external"
+  rm "$repo/.git/hooks/pre-commit"
+  ln -s "$external" "$repo/.git/hooks/pre-commit"
+  reject_setup "symlink hook"
+  [ -L "$repo/.git/hooks/pre-commit" ] || fail "symlink hook was replaced"
+}
 
-printf '%s\n' "setup test: passed"
+assert_custom_hooks_path_is_rejected() {
+  git -C "$repo" config core.hooksPath custom-hooks
+  reject_setup "custom hook path"
+}
+
+main() {
+  setup_repo
+  assert_initial_install
+  assert_repeat_setup_is_quiet
+  assert_managed_hook_updates
+  assert_unmanaged_hook_is_preserved
+  assert_symlink_hook_is_preserved
+  assert_custom_hooks_path_is_rejected
+  printf '%s\n' "setup test: passed"
+}
+
+main

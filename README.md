@@ -3,7 +3,7 @@
 <!-- project language and license matching CMakeLists.txt and LICENSE -->
 
 [![C17](https://img.shields.io/badge/C-17-00599C?logo=c&logoColor=white)](./CMakeLists.txt)
-[![CI](/yowainwright/fs-lint-legibility/actions/workflows/ci.yml/badge.svg)](/yowainwright/fs-lint-legibility/actions/workflows/ci.yml)
+[![CI](https://github.com/yowainwright/fs-lint-legibility/actions/workflows/ci.yml/badge.svg)](https://github.com/yowainwright/fs-lint-legibility/actions/workflows/ci.yml)
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./.github/CONTRIBUTING.md)
 
@@ -51,16 +51,35 @@ a neighboring filename.
 + src/widget/index.c
 ```
 
+### Block generated or throwaway files
+
+Broad patterns keep normal work moving; exclusions make low-context files start
+the right conversation before they enter the tree.
+
+#### do / don't
+
+```diff
+- src/schema.generated.c
++ src/schema.c
+```
+
+With:
+
+```json
+"!**/*.generated.*"
+```
+
 ## Requirements
 
 <!-- supported platforms and tool versions matching CMakeLists.txt and CI workflows -->
 
-| Surface | Supported for 0.1 |
+| Surface | Supported for 0.2 |
 | --- | --- |
 | Operating systems | Linux and macOS |
 | C compiler | GCC or Clang with C17 support |
 | CMake | 3.20 or newer |
 | Git-backed checks | Git 2.30 or newer |
+| Development hooks | `shfmt` and ShellCheck; `shellcheck-legibility` when installed |
 
 Git is not required for `check-path` or `check --stdin0`. The CLI uses POSIX
 process and filesystem APIs; native Windows support is deferred.
@@ -68,6 +87,17 @@ process and filesystem APIs; native Windows support is deferred.
 ## Build and install
 
 <!-- build, test, and install commands matching CMakeLists.txt -->
+
+### Homebrew
+
+After the release formula is finalized:
+
+```sh
+brew tap yowainwright/fs-lint-legibility https://github.com/yowainwright/fs-lint-legibility
+brew install fs-lint-legibility
+```
+
+### From source
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
@@ -85,11 +115,11 @@ cmake --install build --prefix ./dist
 ./scripts/setup.sh
 ```
 
-This generates small managed wrappers for `pre-commit`, `pre-push`, and
-`post-merge` in `.git/hooks`. Pre-commit runs formatting and debug tests;
-pre-push runs release and ASan/UBSan tests; post-merge refreshes the wrappers.
-Setup exits without replacing unmanaged or symlinked hooks. Set
-`core.hooksPath` configurations are also left unchanged. Set
+This generates small managed `pre-commit` and `pre-push` wrappers in
+`.git/hooks`. Pre-commit runs shell checks, C formatting, and debug tests
+before a commit; pre-push runs release and ASan/UBSan tests before a push. Setup exits without
+replacing unmanaged or symlinked hooks. Existing `core.hooksPath`
+configurations are also left unchanged. Set
 `FS_LINT_SKIP_HOOKS=1` to skip hook-triggered work.
 
 The install contains `bin/fs-lint`, `include/legibility.h`, the static policy
@@ -122,12 +152,20 @@ Allow recurring file families explicitly:
   "version": 1,
   "newFiles": {
     "default": "deny",
-    "allow": ["README.md", "src/**/index.c", "**/*.test.c"]
+    "allow": [
+      "README.md",
+      "src/**/index.c",
+      "src/**/*.{c,h}",
+      "packages/*/{src,tests}/**/*.{js,ts,tsx}",
+      "!**/*.generated.*"
+    ]
   }
 }
 ```
 
-`newFiles.default` defaults to `"deny"` when omitted.
+`newFiles.default` defaults to `"deny"` when omitted. Allow patterns are
+evaluated in order; matching positive patterns allow a new file, and matching
+patterns that start with `!` deny it again.
 
 Configuration input is bounded before JSON parsing. A file may contain at most
 1,048,576 bytes, 4,096 allow patterns, 262,144 aggregate pattern bytes, and
@@ -146,9 +184,10 @@ and tests/e2e/readme-rules_test.cmake
 
 The current policy evaluates added paths as follows:
 
-1. `newFiles.default: "allow"` permits every added path.
+1. `newFiles.default: "allow"` permits every added path unless a matching `!`
+   allow pattern denies it.
 2. `newFiles.default: "deny"`, or an omitted default, permits a path only when
-   one of the `newFiles.allow` patterns matches it.
+   a matching positive `newFiles.allow` pattern allows it.
 3. Every other added path produces a `files/new` error.
 4. Modified and deleted paths do not produce new-file violations.
 
@@ -161,6 +200,8 @@ small:
 | `*` | Zero or more characters within one path segment | `src/*.c` matches `src/main.c` |
 | `**` | Zero or more characters across path segments | `docs/**` matches `docs/api/http.md` |
 | `**/` | Zero or more complete directories | `src/**/index.c` matches `src/index.c` and `src/ui/index.c` |
+| `{a,b}` | One of the comma-separated alternatives | `*.{c,h}` matches `main.c` and `main.h` |
+| `!` | Deny a matching path after earlier allows | `!**/*.generated.*` denies `src/api.generated.c` |
 
 Forward and backward slashes are treated as path separators.
 
@@ -198,6 +239,14 @@ configuration or usage errors.
 Text diagnostics escape controls and backslashes so every diagnostic occupies
 one line. JSON diagnostics preserve valid UTF-8 and escape invalid filename
 bytes, so every emitted line is valid JSON.
+
+### Known limitations (beta)
+
+- `--staged` reads the Git index, not unstaged worktree files.
+- Missing configuration exits `2` rather than denying by policy.
+- Cross-repo `--root` usage can be affected by inherited `GIT_DIR`,
+  `GIT_WORK_TREE`, or `GIT_INDEX_FILE`.
+- Configuration discovery outside a Git repository can walk to `/`.
 
 ## Examples
 
@@ -269,11 +318,16 @@ core library.
 
 <!-- release behavior matching project version and .github/workflows/release.yml -->
 
-A tag matching the compiled version, such as `v0.1.0`, runs the complete test
+A tag matching the compiled version, such as `v0.2.0`, runs the complete test
 suite, installs the release payload, and publishes Linux and macOS archives to
-GitHub. Each archive includes the CLI, library, headers, CMake package files,
-and licenses, with a SHA-256 checksum and Sigstore attestation bundle beside it.
-GitHub generates release notes from merged changes.
+GitHub. It also publishes a source archive for the Homebrew formula. Each
+archive includes a SHA-256 checksum; binary archives also include Sigstore
+attestation bundles. GitHub generates release notes from merged changes.
+
+## License
+
+MIT. See [LICENSE](./LICENSE). Release archives also include the bundled yyjson
+MIT license.
 
 ## Language support
 

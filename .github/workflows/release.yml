@@ -9,6 +9,29 @@ permissions:
   contents: read
 
 jobs:
+  source:
+    name: Source release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+      - name: Package source
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          package="fs-lint-legibility_${version}_source"
+          mkdir release
+          git archive --format=tar.gz --prefix="$package/" -o "release/$package.tar.gz" "$GITHUB_SHA"
+          cd release
+          cmake -E sha256sum "$package.tar.gz" > "$package.tar.gz.sha256"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: fs-lint-legibility-source
+          path: |
+            release/*.tar.gz
+            release/*.sha256
+          if-no-files-found: error
+
   build:
     name: ${{ matrix.system }} release
     permissions:
@@ -75,7 +98,9 @@ jobs:
 
   publish:
     name: Publish GitHub release
-    needs: build
+    needs:
+      - build
+      - source
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -92,4 +117,5 @@ jobs:
           gh release create "$GITHUB_REF_NAME" release/*
           --verify-tag
           --generate-notes
+          --prerelease
           --title "fs-lint-legibility $GITHUB_REF_NAME"
