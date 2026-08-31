@@ -167,6 +167,21 @@ static void test_rejects_large_brace_product_without_exponential_work(void) {
   }
 }
 
+static void test_rejects_wildcard_brace_product_without_exponential_work(void) {
+  const char *allow_patterns[] = {"src/"
+                                  "{a*,aa*}{a*,aa*}{a*,aa*}{a*,aa*}{a*,aa*}{a*,aa*}{a*,"
+                                  "aa*}{a*,aa*}.c"};
+  const legibility_config config = {
+      .allow_patterns = allow_patterns,
+      .allow_pattern_count = 1,
+  };
+  captured_diagnostics captured = {0};
+  const legibility_status status = check(&config, "src/aaaaaaaaaaaaa.txt", &captured);
+  if (status != LEGIBILITY_STATUS_VIOLATIONS || captured.count != 1) {
+    fail("expected wildcard brace nonmatches to be rejected without matcher errors");
+  }
+}
+
 static void test_negated_pattern_denies_allowed_path(void) {
   const char *allow_patterns[] = {"src/**/*.c", "!src/**/*.generated.c"};
   const legibility_config config = {
@@ -349,6 +364,7 @@ int main(void) {
   test_rejects_missing_brace_alternative();
   test_allows_large_brace_product_without_expansion_limit();
   test_rejects_large_brace_product_without_exponential_work();
+  test_rejects_wildcard_brace_product_without_exponential_work();
   test_negated_pattern_denies_allowed_path();
   test_negated_pattern_denies_default_allow();
   test_rejects_missing_config();
