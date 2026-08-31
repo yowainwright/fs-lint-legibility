@@ -17,9 +17,9 @@ Install the repository's development hooks with:
 ./scripts/setup.sh
 ```
 
-This generates managed checks that run before commits and pushes. Pre-commit
-runs shell checks, C formatting, and debug tests. Setup refuses to replace
-existing unmanaged hooks.
+This generates managed checks before commits. Pre-commit runs shell checks, C
+formatting, and debug tests. Setup refuses to replace existing unmanaged hooks
+and removes older managed push hooks.
 
 Build and run the complete suite with:
 

@@ -62,9 +62,7 @@ run_shell_checks() {
 }
 
 run_pre_push() {
-  skip_hooks && return 0
-  run_suite release Release
-  run_sanitizers
+  printf 'setup: pre-push hook retired; run ./scripts/setup.sh to remove it\n'
 }
 
 resolve_hooks_dir() {
@@ -91,17 +89,20 @@ check_hook_target() {
 }
 
 check_hook_targets() {
-  for name in pre-commit pre-push; do
-    check_hook_target "$hooks_dir/$name"
-  done
+  check_hook_target "$hooks_dir/pre-commit"
 }
 
-remove_obsolete_hook() {
-  obsolete="$hooks_dir/post-merge"
+remove_managed_hook() {
+  obsolete="$hooks_dir/${1:?}"
   [ -f "$obsolete" ] || return 0
   [ -L "$obsolete" ] && return 0
   grep -Fxq "$marker" "$obsolete" || return 0
   rm "$obsolete"
+}
+
+remove_obsolete_hooks() {
+  remove_managed_hook post-merge
+  remove_managed_hook pre-push
 }
 
 write_hook() {
@@ -139,9 +140,7 @@ hook_is_current() {
 }
 
 write_hooks() {
-  for name in pre-commit pre-push; do
-    write_hook "$name"
-  done
+  write_hook pre-commit
 }
 
 run_install() {
@@ -151,7 +150,7 @@ run_install() {
   resolve_hooks_dir
   mkdir -p "$hooks_dir"
   check_hook_targets
-  remove_obsolete_hook
+  remove_obsolete_hooks
   write_hooks
 }
 

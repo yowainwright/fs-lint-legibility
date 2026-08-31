@@ -115,12 +115,12 @@ cmake --install build --prefix ./dist
 ./scripts/setup.sh
 ```
 
-This generates small managed `pre-commit` and `pre-push` wrappers in
-`.git/hooks`. Pre-commit runs shell checks, C formatting, and debug tests
-before a commit; pre-push runs release and ASan/UBSan tests before a push. Setup exits without
-replacing unmanaged or symlinked hooks. Existing `core.hooksPath`
-configurations are also left unchanged. Set
-`FS_LINT_SKIP_HOOKS=1` to skip hook-triggered work.
+This generates a small managed `pre-commit` wrapper in `.git/hooks`.
+Pre-commit runs shell checks, C formatting, and debug tests before a commit.
+Setup removes older managed `pre-push` and `post-merge` hooks, and exits
+without replacing unmanaged or symlinked hooks. Existing `core.hooksPath`
+configurations are also left unchanged. Set `FS_LINT_SKIP_HOOKS=1` to skip
+hook-triggered work.
 
 The install contains `bin/fs-lint`, `include/legibility.h`, the static policy
 library, CMake package files, and the project and yyjson MIT licenses. CMake

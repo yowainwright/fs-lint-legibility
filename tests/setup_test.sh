@@ -33,14 +33,15 @@ setup_repo() {
 
 assert_initial_install() {
   printf '#!/bin/sh\n%s\nexit 0\n' "$marker" >"$repo/.git/hooks/post-merge"
+  printf '#!/bin/sh\n%s\nexit 0\n' "$marker" >"$repo/.git/hooks/pre-push"
   run_setup "initial setup"
   [ ! -e "$repo/.git/hooks/post-merge" ] ||
     fail "obsolete managed hook was not removed"
-  for name in pre-commit pre-push; do
-    hook="$repo/.git/hooks/$name"
-    [ -x "$hook" ] || fail "$name is not executable"
-    [ "$(wc -l <"$hook")" -eq 4 ] || fail "$name is not a small wrapper"
-  done
+  [ ! -e "$repo/.git/hooks/pre-push" ] ||
+    fail "pre-push hook was not removed"
+  hook="$repo/.git/hooks/pre-commit"
+  [ -x "$hook" ] || fail "pre-commit is not executable"
+  [ "$(wc -l <"$hook")" -eq 4 ] || fail "pre-commit is not a small wrapper"
 }
 
 assert_repeat_setup_is_quiet() {
