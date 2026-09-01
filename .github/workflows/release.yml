@@ -134,6 +134,9 @@ jobs:
     steps:
       - name: Require tap token
         run: test -n "$GH_TOKEN"
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           path: release
@@ -144,75 +147,4 @@ jobs:
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           path: homebrew-tap
       - name: Update formula
-        run: |
-          version="${GITHUB_REF_NAME#v}"
-          cat > homebrew-tap/packages/fs-lint-legibility.json <<JSON
-          {
-            "name": "fs-lint-legibility",
-            "class_name": "FsLintLegibility",
-            "command": "fs-lint",
-            "repo": "yowainwright/fs-lint-legibility",
-            "desc": "Filesystem linting for proposed files",
-            "homepage": "https://github.com/yowainwright/fs-lint-legibility",
-            "license": "MIT",
-            "version": "$version",
-            "asset_prefix": "fs-lint-legibility",
-            "readme": true
-          }
-          JSON
-
-          cd homebrew-tap
-          if test -f Formula/fs-lint-legibility.rb; then
-            scripts/update-formula fs-lint-legibility "$version"
-          else
-            scripts/new-formula fs-lint-legibility "$version"
-          fi
-      - name: Validate formula
-        working-directory: homebrew-tap
-        run: |
-          brew tap yowainwright/tap "$PWD"
-          brew audit --strict --online yowainwright/tap/fs-lint-legibility
-          brew install yowainwright/tap/fs-lint-legibility
-          brew test yowainwright/tap/fs-lint-legibility
-      - name: Open pull request
-        working-directory: homebrew-tap
-        run: |
-          branch="fs-lint-legibility-${GITHUB_REF_NAME}"
-          pr_body="Updates fs-lint-legibility to ${GITHUB_REF_NAME} from the published binary archives."
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout -B "$branch"
-          git add \
-            Formula/fs-lint-legibility.rb \
-            packages/fs-lint-legibility.json \
-            README.md
-
-          if git diff --cached --quiet; then
-            echo "Formula is already current."
-            exit 0
-          fi
-
-          git commit -m "fs-lint-legibility ${GITHUB_REF_NAME}"
-          git push --force-with-lease origin "$branch"
-
-          pr_url="$(
-            gh pr list \
-              --repo "$TAP_REPOSITORY" \
-              --head "yowainwright:$branch" \
-              --state open \
-              --json url \
-              --jq '.[0].url // ""'
-          )"
-
-          if [ -n "$pr_url" ]; then
-            echo "$pr_url"
-            exit 0
-          fi
-
-          gh pr create \
-            --repo "$TAP_REPOSITORY" \
-            --base main \
-            --head "yowainwright:$branch" \
-            --title "fs-lint-legibility ${GITHUB_REF_NAME}" \
-            --body "$pr_body"
+        run: scripts/release.sh homebrew-pr homebrew-tap "$GITHUB_REF_NAME"
