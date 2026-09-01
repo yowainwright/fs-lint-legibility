@@ -33,7 +33,7 @@ jobs:
           if-no-files-found: error
 
   build:
-    name: ${{ matrix.system }} release
+    name: ${{ matrix.asset_os }}-${{ matrix.asset_arch }} release
     permissions:
       attestations: write
       contents: read
@@ -42,10 +42,18 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - system: Linux
-            runner: ubuntu-latest
-          - system: macOS
+          - asset_os: darwin
+            asset_arch: arm64
             runner: macos-latest
+          - asset_os: darwin
+            asset_arch: amd64
+            runner: macos-15-intel
+          - asset_os: linux
+            asset_arch: arm64
+            runner: ubuntu-24.04-arm
+          - asset_os: linux
+            asset_arch: amd64
+            runner: ubuntu-latest
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -67,33 +75,28 @@ jobs:
       - name: Package
         id: package
         run: |
-          platform=$(uname -s | tr '[:upper:]' '[:lower:]')
-          architecture=$(uname -m)
-          package="fs-lint-legibility-${GITHUB_REF_NAME}-${platform}-${architecture}"
+          package="fs-lint-legibility-${{ matrix.asset_os }}-${{ matrix.asset_arch }}"
           mkdir release
-          cmake --install build --prefix "$PWD/release/$package"
-          "$PWD/release/$package/bin/fs-lint" --version
-          tar -C release -czf "release/$package.tar.gz" "$package"
+          cp build/fs-lint "release/$package"
+          "release/$package" --version
           cd release
-          cmake -E sha256sum "$package.tar.gz" > "$package.tar.gz.sha256"
+          cmake -E sha256sum "$package" > "$package.sha256"
           echo "name=$package" >> "$GITHUB_OUTPUT"
-      - name: Attest archive
+      - name: Attest binary
         id: attest
         uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26
         with:
-          subject-path: release/${{ steps.package.outputs.name }}.tar.gz
+          subject-path: release/${{ steps.package.outputs.name }}
       - name: Prepare release attestation
         env:
           BUNDLE_PATH: ${{ steps.attest.outputs.bundle-path }}
           PACKAGE_NAME: ${{ steps.package.outputs.name }}
-        run: cp "$BUNDLE_PATH" "release/$PACKAGE_NAME.tar.gz.sigstore.json"
+        run: cp "$BUNDLE_PATH" "release/$PACKAGE_NAME.sigstore.json"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: ${{ steps.package.outputs.name }}
           path: |
-            release/*.tar.gz
-            release/*.sha256
-            release/*.sigstore.json
+            release/*
           if-no-files-found: error
 
   publish:
@@ -117,5 +120,99 @@ jobs:
           gh release create "$GITHUB_REF_NAME" release/*
           --verify-tag
           --generate-notes
-          --prerelease
           --title "fs-lint-legibility $GITHUB_REF_NAME"
+
+  homebrew:
+    name: Open Homebrew tap PR
+    needs:
+      - build
+      - publish
+    runs-on: macos-latest
+    env:
+      GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+      TAP_REPOSITORY: yowainwright/homebrew-tap
+    steps:
+      - name: Require tap token
+        run: test -n "$GH_TOKEN"
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          path: release
+          merge-multiple: true
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: ${{ env.TAP_REPOSITORY }}
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: homebrew-tap
+      - name: Update formula
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          cat > homebrew-tap/packages/fs-lint-legibility.json <<JSON
+          {
+            "name": "fs-lint-legibility",
+            "class_name": "FsLintLegibility",
+            "command": "fs-lint",
+            "repo": "yowainwright/fs-lint-legibility",
+            "desc": "Filesystem linting for proposed files",
+            "homepage": "https://github.com/yowainwright/fs-lint-legibility",
+            "license": "MIT",
+            "version": "$version",
+            "asset_prefix": "fs-lint-legibility",
+            "readme": true
+          }
+          JSON
+
+          cd homebrew-tap
+          if test -f Formula/fs-lint-legibility.rb; then
+            scripts/update-formula fs-lint-legibility "$version"
+          else
+            scripts/new-formula fs-lint-legibility "$version"
+          fi
+      - name: Validate formula
+        working-directory: homebrew-tap
+        run: |
+          brew tap yowainwright/tap "$PWD"
+          brew audit --strict --online yowainwright/tap/fs-lint-legibility
+          brew install yowainwright/tap/fs-lint-legibility
+          brew test yowainwright/tap/fs-lint-legibility
+      - name: Open pull request
+        working-directory: homebrew-tap
+        run: |
+          branch="fs-lint-legibility-${GITHUB_REF_NAME}"
+          pr_body="Updates fs-lint-legibility to ${GITHUB_REF_NAME} from the published binary archives."
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$branch"
+          git add \
+            Formula/fs-lint-legibility.rb \
+            packages/fs-lint-legibility.json \
+            README.md
+
+          if git diff --cached --quiet; then
+            echo "Formula is already current."
+            exit 0
+          fi
+
+          git commit -m "fs-lint-legibility ${GITHUB_REF_NAME}"
+          git push --force-with-lease origin "$branch"
+
+          pr_url="$(
+            gh pr list \
+              --repo "$TAP_REPOSITORY" \
+              --head "yowainwright:$branch" \
+              --state open \
+              --json url \
+              --jq '.[0].url // ""'
+          )"
+
+          if [ -n "$pr_url" ]; then
+            echo "$pr_url"
+            exit 0
+          fi
+
+          gh pr create \
+            --repo "$TAP_REPOSITORY" \
+            --base main \
+            --head "yowainwright:$branch" \
+            --title "fs-lint-legibility ${GITHUB_REF_NAME}" \
+            --body "$pr_body"

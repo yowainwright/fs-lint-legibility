@@ -38,6 +38,17 @@ clang-format -i include/*.h src/*.c src/*.h tests/*.c
 CI also compiles with `-Werror` on GCC and Clang and runs AddressSanitizer and
 UndefinedBehaviorSanitizer on Linux.
 
+## Release
+
+Release automation runs from a pushed `vX.Y.Z` tag. The release workflow builds
+and tests the project, publishes the full binary asset matrix, then opens a
+formula update pull request against `yowainwright/homebrew-tap` using the tap's
+`scripts/new-formula` and `scripts/update-formula` API.
+
+The repository secret `HOMEBREW_TAP_TOKEN` must have contents and pull request
+write access to `yowainwright/homebrew-tap`. The tap automation scripts must be
+available on the tap's default branch before this workflow can update formulae.
+
 ## Changes
 
 - Keep the policy library dependency-free C17.

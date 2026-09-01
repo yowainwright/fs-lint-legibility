@@ -90,10 +90,8 @@ process and filesystem APIs; native Windows support is deferred.
 
 ### Homebrew
 
-After the release formula is finalized:
-
 ```sh
-brew tap yowainwright/fs-lint-legibility https://github.com/yowainwright/fs-lint-legibility
+brew tap yowainwright/tap
 brew install fs-lint-legibility
 ```
 
@@ -122,9 +120,9 @@ without replacing unmanaged or symlinked hooks. Existing `core.hooksPath`
 configurations are also left unchanged. Set `FS_LINT_SKIP_HOOKS=1` to skip
 hook-triggered work.
 
-The install contains `bin/fs-lint`, `include/legibility.h`, the static policy
-library, CMake package files, and the project and yyjson MIT licenses. CMake
-consumers can use the exported target directly:
+A source install contains `bin/fs-lint`, `include/legibility.h`, the static
+policy library, CMake package files, and the project and yyjson MIT licenses.
+CMake consumers can use the exported target directly:
 
 ```cmake
 find_package(legibility 0.1 CONFIG REQUIRED)
