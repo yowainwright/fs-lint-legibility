@@ -28,11 +28,12 @@ setup_repo() {
   mkdir -p "$repo/scripts"
   cp "$source_root/scripts/setup.sh" "$repo/scripts/setup.sh"
   git -C "$repo" init -q
-  marker="# fs-lint-legibility managed hook"
+  marker="# fs-lint managed hook"
+  legacy_marker="# fs-lint-legibility managed hook"
 }
 
 assert_initial_install() {
-  printf '#!/bin/sh\n%s\nexit 0\n' "$marker" >"$repo/.git/hooks/post-merge"
+  printf '#!/bin/sh\n%s\nexit 0\n' "$legacy_marker" >"$repo/.git/hooks/post-merge"
   printf '#!/bin/sh\n%s\nexit 0\n' "$marker" >"$repo/.git/hooks/pre-push"
   run_setup "initial setup"
   [ ! -e "$repo/.git/hooks/post-merge" ] ||

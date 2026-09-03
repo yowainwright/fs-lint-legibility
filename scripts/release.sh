@@ -71,7 +71,7 @@ canonical_dir() {
 write_package() {
   tap_dir="${1:?}"
   version="${2:?}"
-  package_path="$tap_dir/brews/fs-lint-legibility.json"
+  package_path="$tap_dir/brews/fs-lint.json"
 
   package_metadata_json "$version" >"$package_path"
 }
@@ -87,15 +87,15 @@ package_metadata_json() {
 
   printf '%s\n' \
     '{' \
-    '  "name": "fs-lint-legibility",' \
-    '  "class_name": "FsLintLegibility",' \
+    '  "name": "fs-lint",' \
+    '  "class_name": "FsLint",' \
     '  "command": "fs-lint",' \
-    '  "repo": "yowainwright/fs-lint-legibility",' \
-    '  "desc": "Filesystem linting for proposed files",' \
-    '  "homepage": "https://github.com/yowainwright/fs-lint-legibility",' \
+    '  "repo": "yowainwright/fs-lint",' \
+    '  "desc": "Enforce project file and folder structure",' \
+    '  "homepage": "https://github.com/yowainwright/fs-lint",' \
     '  "license": "MIT",' \
     "  \"version\": \"$version\"," \
-    '  "asset_prefix": "fs-lint-legibility",' \
+    '  "asset_prefix": "fs-lint",' \
     "  \"managed\": $is_managed," \
     "  \"readme\": $show_in_readme" \
     '}'
@@ -106,15 +106,15 @@ update_formula() {
   version="${2:?}"
 
   cd "$tap_dir"
-  [ -f Formula/fs-lint-legibility.rb ] || return_new_formula "$version"
+  [ -f Formula/fs-lint.rb ] || return_new_formula "$version"
 
-  scripts/update-formula fs-lint-legibility "$version"
+  scripts/update-formula fs-lint "$version"
 }
 
 return_new_formula() {
   version="${1:?}"
 
-  scripts/new-formula fs-lint-legibility "$version"
+  scripts/new-formula fs-lint "$version"
 }
 
 validate_formula() {
@@ -122,16 +122,16 @@ validate_formula() {
 
   cd "$tap_dir"
   brew tap yowainwright/tap "$PWD"
-  brew audit --strict --online yowainwright/tap/fs-lint-legibility
-  brew install yowainwright/tap/fs-lint-legibility
-  brew test yowainwright/tap/fs-lint-legibility
+  brew audit --strict --online yowainwright/tap/fs-lint
+  brew install yowainwright/tap/fs-lint
+  brew test yowainwright/tap/fs-lint
 }
 
 open_pull_request() {
   tap_dir="${1:?}"
   tag="${2:?}"
   tap_repository="${TAP_REPOSITORY:-yowainwright/homebrew-tap}"
-  branch="fs-lint-legibility-$tag"
+  branch="fs-lint-$tag"
 
   cd "$tap_dir"
   prepare_pr_branch "$branch"
@@ -151,8 +151,8 @@ prepare_pr_branch() {
 
 stage_release_files() {
   git add \
-    Formula/fs-lint-legibility.rb \
-    brews/fs-lint-legibility.json \
+    Formula/fs-lint.rb \
+    brews/fs-lint.json \
     README.md
 }
 
@@ -165,7 +165,7 @@ publish_pr_branch() {
   branch="${1:?}"
   tag="${2:?}"
 
-  git commit -m "fs-lint-legibility $tag"
+  git commit -m "fs-lint $tag"
   git push --force-with-lease origin "$branch"
 }
 
@@ -199,13 +199,13 @@ create_pull_request() {
   tap_repository="${1:?}"
   branch="${2:?}"
   tag="${3:?}"
-  pr_body="Updates fs-lint-legibility to $tag from the published binary archives."
+  pr_body="Updates fs-lint to $tag from the published binary archives."
 
   gh pr create \
     --repo "$tap_repository" \
     --base main \
     --head "yowainwright:$branch" \
-    --title "fs-lint-legibility $tag" \
+    --title "fs-lint $tag" \
     --body "$pr_body"
 }
 

@@ -77,8 +77,14 @@ is_unmanaged_hook() {
   target="${1:?}"
   [ -L "$target" ] && return 0
   [ -e "$target" ] || return 1
-  grep -Fxq "$marker" "$target" && return 1
+  is_managed_hook "$target" && return 1
   return 0
+}
+
+is_managed_hook() {
+  target="${1:?}"
+  grep -Fxq "$marker" "$target" && return 0
+  grep -Fxq "$legacy_marker" "$target"
 }
 
 check_hook_target() {
@@ -96,7 +102,7 @@ remove_managed_hook() {
   obsolete="$hooks_dir/${1:?}"
   [ -f "$obsolete" ] || return 0
   [ -L "$obsolete" ] && return 0
-  grep -Fxq "$marker" "$obsolete" || return 0
+  is_managed_hook "$obsolete" || return 0
   rm "$obsolete"
 }
 
@@ -174,7 +180,8 @@ dispatch() {
 }
 
 main() {
-  marker="# fs-lint-legibility managed hook"
+  marker="# fs-lint managed hook"
+  legacy_marker="# fs-lint-legibility managed hook"
   script_dir="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
   root="$(git -C "$script_dir/.." rev-parse --show-toplevel)"
   mode="${1:-install}"

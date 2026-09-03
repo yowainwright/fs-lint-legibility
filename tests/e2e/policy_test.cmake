@@ -2,7 +2,7 @@ file(REMOVE_RECURSE "${TEST_ROOT}")
 file(MAKE_DIRECTORY "${TEST_ROOT}")
 file(
   WRITE
-  "${TEST_ROOT}/.legibilityrc.json"
+  "${TEST_ROOT}/fs-lint.json"
   "{\"version\":1,\"newFiles\":{}}"
 )
 
@@ -54,7 +54,7 @@ endif()
 
 file(
   WRITE
-  "${TEST_ROOT}/.legibilityrc.json"
+  "${TEST_ROOT}/fs-lint.json"
   "{\"version\":1,\"newFiles\":{\"default\":\"allow\"}}"
 )
 
@@ -101,7 +101,7 @@ string(
   "\"newFiles\":{\"default\":\"deny\","
   "\"allow\":[\"src/**/index.c\"]}}"
 )
-file(WRITE "${TEST_ROOT}/.legibilityrc.json" "${pattern_config}")
+file(WRITE "${TEST_ROOT}/fs-lint.json" "${pattern_config}")
 
 execute_process(
   COMMAND "${FS_LINT}" check-path src/widget/index.c
@@ -126,7 +126,7 @@ string(
   "\"newFiles\":{\"default\":\"deny\","
   "\"allow\":[\"src/{a,aa}{a,aa}{a,aa}{a,aa}{a,aa}{a,aa}{a,aa}{a,aa}{a,aa}{a,aa}{a,aa}{a,aa}{a,aa}.c\"]}}"
 )
-file(WRITE "${TEST_ROOT}/.legibilityrc.json" "${large_brace_config}")
+file(WRITE "${TEST_ROOT}/fs-lint.json" "${large_brace_config}")
 
 execute_process(
   COMMAND "${FS_LINT}" check-path src/aaaaaaaaaaaaa.c
@@ -167,7 +167,7 @@ string(
   "\"newFiles\":{\"default\":\"deny\","
   "\"allow\":[\"src/{a*,aa*}{a*,aa*}{a*,aa*}{a*,aa*}{a*,aa*}{a*,aa*}{a*,aa*}{a*,aa*}.c\"]}}"
 )
-file(WRITE "${TEST_ROOT}/.legibilityrc.json" "${wildcard_brace_config}")
+file(WRITE "${TEST_ROOT}/fs-lint.json" "${wildcard_brace_config}")
 
 execute_process(
   COMMAND "${FS_LINT}" check-path src/aaaaaaaaaaaaa.txt

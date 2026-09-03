@@ -21,57 +21,71 @@ endfunction()
 
 assert_invalid_config(
   unknown
-  .legibilityrc.json
+  fs-lint.json
   "{\"version\":1,\"newFiles\":{\"default\":\"deny\"},\"mystery\":true}"
   "unknown configuration key: mystery"
 )
 
 assert_invalid_config(
   duplicate
-  .legibilityrc.json
+  fs-lint.json
   "{\"version\":1,\"version\":1,\"newFiles\":{\"default\":\"deny\"}}"
   "duplicate configuration key: version"
 )
 
 assert_invalid_config(
   embedded-nul-default
-  .legibilityrc.json
+  fs-lint.json
   "{\"version\":1,\"newFiles\":{\"default\":\"allow\\u0000junk\"}}"
   "newFiles.default must be \"allow\" or \"deny\""
 )
 
 assert_invalid_config(
   embedded-nul-pattern
-  .legibilityrc.json
+  fs-lint.json
   "{\"version\":1,\"newFiles\":{\"allow\":[\"**\\u0000suffix\"]}}"
   "newFiles.allow must not contain embedded NUL bytes"
 )
 
 assert_invalid_config(
   embedded-nul-root-key
-  .legibilityrc.json
+  fs-lint.json
   "{\"version\\u0000junk\":1,\"newFiles\":{\"default\":\"allow\"}}"
   "configuration key must not contain embedded NUL bytes"
 )
 
 assert_invalid_config(
   embedded-nul-new-files-key
-  .legibilityrc.json
+  fs-lint.json
   "{\"version\":1,\"newFiles\":{\"default\\u0000junk\":\"allow\"}}"
   "configuration key must not contain embedded NUL bytes"
 )
 
 assert_invalid_config(
-  toml
-  .legibilityrc.toml
+  yaml
+  fs-lint.yaml
   "version = 1\n[newFiles]\ndefault = \"deny\"\n"
-  "TOML configuration reader is not available yet"
+  "YAML configuration reader is not available yet"
+)
+
+assert_invalid_config(
+  toml-unknown
+  fs-lint.toml
+  "version = 1\nmystery = true\n[newFiles]\ndefault = \"deny\"\n"
+  "unknown configuration key: mystery"
+)
+
+assert_invalid_config(
+  toml-invalid-allow
+  fs-lint.toml
+  "version = 1\n[newFiles]\nallow = [\"src/**\", 1]\n"
+  "newFiles.allow must contain only strings"
 )
 
 string(REPEAT " " 1048577 oversized_config)
 assert_invalid_config(
   oversized
-  .legibilityrc.json
+  fs-lint.json
   "${oversized_config}"
   "configuration exceeds 1048576 bytes"
 )
@@ -87,7 +101,7 @@ set(
 )
 assert_invalid_config(
   excessive-patterns
-  .legibilityrc.json
+  fs-lint.json
   "${excessive_patterns}"
   "newFiles.allow exceeds 4096 patterns"
 )
@@ -104,7 +118,7 @@ set(
 )
 assert_invalid_config(
   excessive-pattern-bytes
-  .legibilityrc.json
+  fs-lint.json
   "${excessive_pattern_bytes}"
   "newFiles.allow exceeds 262144 bytes"
 )

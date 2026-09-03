@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for improving `fs-lint-legibility`.
+Thanks for improving `fs-lint`.
 
 ## Development setup
 

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(fs_lint_legibility VERSION 0.2.0 LANGUAGES C)
+project(fs_lint VERSION 0.2.0 LANGUAGES C)
 
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
@@ -20,6 +20,9 @@ endfunction()
 
 add_library(yyjson STATIC vendor/yyjson/yyjson.c)
 target_include_directories(yyjson PUBLIC vendor/yyjson)
+
+add_library(tomlc17 STATIC vendor/tomlc17/tomlc17.c)
+target_include_directories(tomlc17 PUBLIC vendor/tomlc17)
 
 add_library(legibility STATIC src/glob.c src/legibility.c)
 target_include_directories(
@@ -41,7 +44,7 @@ add_executable(
   src/main.c
 )
 target_include_directories(fs-lint PRIVATE src)
-target_link_libraries(fs-lint PRIVATE legibility yyjson)
+target_link_libraries(fs-lint PRIVATE legibility yyjson tomlc17)
 target_compile_definitions(fs-lint PRIVATE FS_LINT_VERSION="${PROJECT_VERSION}")
 legibility_enable_warnings(fs-lint)
 
@@ -57,6 +60,11 @@ install(
   FILES vendor/yyjson/LICENSE
   DESTINATION ${CMAKE_INSTALL_DOCDIR}
   RENAME yyjson-LICENSE
+)
+install(
+  FILES vendor/tomlc17/LICENSE
+  DESTINATION ${CMAKE_INSTALL_DOCDIR}
+  RENAME tomlc17-LICENSE
 )
 configure_package_config_file(
   cmake/legibility-config.cmake.in
@@ -115,6 +123,7 @@ if(BUILD_TESTING)
 
   add_fs_lint_e2e(discovery)
   add_fs_lint_e2e(explicit-config)
+  add_fs_lint_e2e(cli-overrides)
   add_fs_lint_e2e(git-staged)
   add_fs_lint_e2e(invalid-config)
   add_fs_lint_e2e(install)
@@ -122,6 +131,7 @@ if(BUILD_TESTING)
   add_fs_lint_e2e(policy)
   add_fs_lint_e2e(readme-rules)
   add_fs_lint_e2e(stdin0)
+  add_fs_lint_e2e(toml-config)
   add_fs_lint_e2e(usage)
 
   add_custom_target(

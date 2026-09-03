@@ -18,8 +18,8 @@ endif()
 
 file(GLOB installed_licenses "${install_root}/share/doc/*/*LICENSE")
 list(LENGTH installed_licenses license_count)
-if(NOT license_count EQUAL 2)
-  message(FATAL_ERROR "expected two installed licenses, found ${license_count}")
+if(NOT license_count EQUAL 3)
+  message(FATAL_ERROR "expected three installed licenses, found ${license_count}")
 endif()
 
 file(MAKE_DIRECTORY "${consumer_root}")
@@ -28,7 +28,7 @@ file(
   [=[cmake_minimum_required(VERSION 3.20)
 project(legibility_consumer LANGUAGES C)
 
-find_package(legibility 0.1 CONFIG REQUIRED)
+find_package(legibility 0.2 CONFIG REQUIRED)
 
 add_executable(legibility-consumer main.c)
 target_link_libraries(legibility-consumer PRIVATE legibility::legibility)

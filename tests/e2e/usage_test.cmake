@@ -10,10 +10,12 @@ string(
   expected_error
   "usage: fs-lint check-path "
   "[--root path] [--config path] "
-  "[--format text|json] [--] <path>\n"
+  "[--format text|json] [--allow pattern] "
+  "[--deny pattern] [--] <path>\n"
   "usage: fs-lint check (--stdin0|--staged|--base ref) "
   "[--root path] [--config path] "
-  "[--format text|json]\n"
+  "[--format text|json] [--allow pattern] "
+  "[--deny pattern]\n"
 )
 
 if(NOT status EQUAL 2)

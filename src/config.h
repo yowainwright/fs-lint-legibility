@@ -15,6 +15,9 @@ typedef struct {
 
 bool cli_config_load(const char *root, const char *config_path, cli_config *config);
 
+bool cli_config_append_patterns(cli_config *config, const char *const *patterns,
+                                size_t pattern_count);
+
 void cli_config_destroy(cli_config *config);
 
 #endif

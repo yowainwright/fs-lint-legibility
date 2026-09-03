@@ -1,5 +1,5 @@
 function(write_config contents)
-  file(WRITE "${TEST_ROOT}/.legibilityrc.json" "${contents}")
+  file(WRITE "${TEST_ROOT}/fs-lint.json" "${contents}")
 endfunction()
 
 function(assert_path path expected_status expected_output)
@@ -37,19 +37,21 @@ string(
   CONCAT
   readme_config
   "{\"version\":1,\"newFiles\":{\"default\":\"deny\","
-  "\"allow\":[\"README.md\",\"src/**/index.c\",\"src/**/*.{c,h}\","
-  "\"packages/*/{src,tests}/**/*.{js,ts,tsx}\","
+  "\"allow\":[\"README.md\",\"docs/**/*.md\",\"src/**/*.{js,ts,tsx}\","
+  "\"cmd/**/*.go\",\"crates/**/*.rs\",\"native/**/*.{c,h,cpp}\","
   "\"!**/*.generated.*\"]}}"
 )
 write_config("${readme_config}")
 assert_path(README.md 0 "")
-assert_path(src/index.c 0 "")
-assert_path(src/ui/index.c 0 "")
-assert_path(src/parser.c 0 "")
-assert_path(src/parser.h 0 "")
-assert_path(packages/cli/src/index.js 0 "")
-assert_path(packages/cli/tests/index.test.ts 0 "")
-assert_path(packages/ui/src/Button.tsx 0 "")
+assert_path(docs/setup.md 0 "")
+assert_path(src/index.js 0 "")
+assert_path(src/ui/index.ts 0 "")
+assert_path(src/ui/Button.tsx 0 "")
+assert_path(cmd/fs-lint/main.go 0 "")
+assert_path(crates/fs/src/lib.rs 0 "")
+assert_path(native/main.c 0 "")
+assert_path(native/main.h 0 "")
+assert_path(native/main.cpp 0 "")
 
 set(
   readme_denied
@@ -59,9 +61,9 @@ assert_path(tools/new-helper.py 1 "${readme_denied}")
 
 set(
   readme_generated_denied
-  "src/schema.generated.c: error files/new: new file is not allowed by configuration\n"
+  "src/schema.generated.ts: error files/new: new file is not allowed by configuration\n"
 )
-assert_path(src/schema.generated.c 1 "${readme_generated_denied}")
+assert_path(src/schema.generated.ts 1 "${readme_generated_denied}")
 
 string(
   CONCAT

@@ -19,14 +19,14 @@ jobs:
       - name: Package source
         run: |
           version="${GITHUB_REF_NAME#v}"
-          package="fs-lint-legibility_${version}_source"
+          package="fs-lint-${version}-source"
           mkdir release
           git archive --format=tar.gz --prefix="$package/" -o "release/$package.tar.gz" "$GITHUB_SHA"
           cd release
           cmake -E sha256sum "$package.tar.gz" > "$package.tar.gz.sha256"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: fs-lint-legibility-source
+          name: fs-lint-source
           path: |
             release/*.tar.gz
             release/*.sha256
@@ -75,7 +75,7 @@ jobs:
       - name: Package
         id: package
         run: |
-          package="fs-lint-legibility-${{ matrix.asset_os }}-${{ matrix.asset_arch }}"
+          package="fs-lint-${{ matrix.asset_os }}-${{ matrix.asset_arch }}"
           mkdir release
           cp build/fs-lint "release/$package"
           "release/$package" --version
@@ -120,7 +120,7 @@ jobs:
           gh release create "$GITHUB_REF_NAME" release/*
           --verify-tag
           --generate-notes
-          --title "fs-lint-legibility $GITHUB_REF_NAME"
+          --title "fs-lint $GITHUB_REF_NAME"
 
   homebrew:
     name: Open Homebrew tap PR

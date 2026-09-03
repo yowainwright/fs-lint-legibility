@@ -2,7 +2,7 @@ file(REMOVE_RECURSE "${TEST_ROOT}")
 file(MAKE_DIRECTORY "${TEST_ROOT}")
 file(
   WRITE
-  "${TEST_ROOT}/.legibilityrc.json"
+  "${TEST_ROOT}/fs-lint.json"
   "{\"version\":1,\"newFiles\":{}}"
 )
 

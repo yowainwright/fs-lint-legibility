@@ -32,7 +32,7 @@ file(
 file(WRITE "${TEST_ROOT}/gitconfig" "")
 file(
   WRITE
-  "${TEST_ROOT}/.legibilityrc.json"
+  "${TEST_ROOT}/fs-lint.json"
   "{\"version\":1,\"newFiles\":{}}"
 )
 file(WRITE "${TEST_ROOT}/src/existing.c" "int existing(void) { return 1; }\n")
@@ -287,7 +287,7 @@ file(REMOVE_RECURSE "${non_repo}")
 file(MAKE_DIRECTORY "${non_repo}")
 file(
   WRITE
-  "${non_repo}/.legibilityrc.json"
+  "${non_repo}/fs-lint.json"
   "{\"version\":1,\"newFiles\":{}}"
 )
 
