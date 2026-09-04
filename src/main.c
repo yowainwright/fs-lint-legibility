@@ -5,6 +5,7 @@
 
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 typedef enum { CLI_COMMAND_INVALID, CLI_CHECK_PATH, CLI_CHECK_BATCH } cli_command;
@@ -16,20 +17,29 @@ typedef struct {
   const char *base;
   cli_output_format format;
   cli_command command;
+  char **override_patterns;
+  size_t override_pattern_count;
+  size_t override_pattern_capacity;
   bool stdin0;
   bool staged;
+  char error[128];
 } cli_arguments;
 
 static void print_usage(FILE *stream) {
   fputs("usage: fs-lint check-path [--root path] [--config path] "
-        "[--format text|json] [--] <path>\n",
+        "[--format text|json] [--allow pattern] [--deny pattern] [--] <path>\n",
         stream);
   fputs("usage: fs-lint check (--stdin0|--staged|--base ref) [--root path] "
-        "[--config path] [--format text|json]\n",
+        "[--config path] [--format text|json] [--allow pattern] "
+        "[--deny pattern]\n",
         stream);
 }
 
-static int usage(void) {
+static int usage(const cli_arguments *arguments) {
+  if (arguments->error[0] != '\0') {
+    fprintf(stderr, "fs-lint: %s\n", arguments->error);
+    return LEGIBILITY_STATUS_ERROR;
+  }
   print_usage(stderr);
   return LEGIBILITY_STATUS_ERROR;
 }
@@ -50,6 +60,14 @@ static void initialize_arguments(cli_arguments *arguments) {
       .root = ".",
       .format = CLI_OUTPUT_TEXT,
   };
+}
+
+static void destroy_arguments(cli_arguments *arguments) {
+  for (size_t index = 0; index < arguments->override_pattern_count; index += 1) {
+    free(arguments->override_patterns[index]);
+  }
+  free(arguments->override_patterns);
+  memset(arguments, 0, sizeof(*arguments));
 }
 
 static bool read_command(const char *value, cli_arguments *arguments) {
@@ -101,6 +119,69 @@ static bool read_string_option(int argc, char **argv, size_t *index,
   return true;
 }
 
+static bool set_parse_error(cli_arguments *arguments, const char *message) {
+  snprintf(arguments->error, sizeof(arguments->error), "%s", message);
+  return false;
+}
+
+static char *copy_pattern_override(const char *value, bool denied) {
+  const size_t prefix = denied ? 1U : 0U;
+  const size_t size = strlen(value) + prefix + 1U;
+  char *pattern = malloc(size);
+  if (pattern == NULL) {
+    return NULL;
+  }
+  if (denied) {
+    pattern[0] = '!';
+  }
+  memcpy(pattern + prefix, value, size - prefix);
+  return pattern;
+}
+
+static bool grow_override_patterns(cli_arguments *arguments) {
+  const size_t doubled = arguments->override_pattern_capacity * 2U;
+  const size_t capacity = arguments->override_pattern_capacity == 0 ? 4U : doubled;
+  char **patterns = realloc(arguments->override_patterns,
+                            capacity * sizeof(*arguments->override_patterns));
+  if (patterns == NULL) {
+    return set_parse_error(arguments, "could not allocate CLI patterns");
+  }
+  arguments->override_patterns = patterns;
+  arguments->override_pattern_capacity = capacity;
+  return true;
+}
+
+static bool append_pattern_override(cli_arguments *arguments, const char *value,
+                                    bool denied) {
+  if (value[0] == '!') {
+    const char *option = denied ? "--deny" : "--allow";
+    snprintf(arguments->error, sizeof(arguments->error),
+             "%s patterns must not start with !", option);
+    return false;
+  }
+  const bool needs_capacity =
+      arguments->override_pattern_count == arguments->override_pattern_capacity;
+  if (needs_capacity && !grow_override_patterns(arguments)) {
+    return false;
+  }
+  char *pattern = copy_pattern_override(value, denied);
+  if (pattern == NULL) {
+    return set_parse_error(arguments, "could not allocate CLI pattern");
+  }
+  arguments->override_patterns[arguments->override_pattern_count] = pattern;
+  arguments->override_pattern_count += 1;
+  return true;
+}
+
+static bool read_pattern_option(int argc, char **argv, size_t *index,
+                                cli_arguments *arguments, bool denied) {
+  const char *value = next_value(argc, argv, index);
+  if (value == NULL) {
+    return false;
+  }
+  return append_pattern_override(arguments, value, denied);
+}
+
 static bool read_flag(size_t *index, bool *destination) {
   if (*destination) {
     return false;
@@ -135,6 +216,12 @@ static bool parse_option(int argc, char **argv, size_t *index,
   }
   if (strcmp(option, "--format") == 0) {
     return read_format(argc, argv, index, arguments);
+  }
+  if (strcmp(option, "--allow") == 0) {
+    return read_pattern_option(argc, argv, index, arguments, false);
+  }
+  if (strcmp(option, "--deny") == 0) {
+    return read_pattern_option(argc, argv, index, arguments, true);
   }
   return read_source_option(argc, argv, option, index, arguments);
 }
@@ -230,6 +317,14 @@ static int run_checks(const cli_arguments *arguments, const legibility_change *c
     cli_config_destroy(&config);
     return LEGIBILITY_STATUS_ERROR;
   }
+  const bool appended = cli_config_append_patterns(
+      &config, (const char *const *)arguments->override_patterns,
+      arguments->override_pattern_count);
+  if (!appended) {
+    report_cli_error("config/invalid", config.source_path, config.error, &output);
+    cli_config_destroy(&config);
+    return LEGIBILITY_STATUS_ERROR;
+  }
   const legibility_status status =
       legibility_check(&config.policy, changes, change_count, cli_report, &output);
   cli_config_destroy(&config);
@@ -269,6 +364,8 @@ static int check_batch(const cli_arguments *arguments) {
 }
 
 int main(int argc, char **argv) {
+  cli_arguments arguments;
+  initialize_arguments(&arguments);
   if (wants_help(argc, argv)) {
     print_usage(stdout);
     return LEGIBILITY_STATUS_OK;
@@ -277,12 +374,13 @@ int main(int argc, char **argv) {
     printf("fs-lint %s\n", FS_LINT_VERSION);
     return LEGIBILITY_STATUS_OK;
   }
-  cli_arguments arguments;
   if (!parse_arguments(argc, argv, &arguments)) {
-    return usage();
+    const int status = usage(&arguments);
+    destroy_arguments(&arguments);
+    return status;
   }
-  if (arguments.command == CLI_CHECK_PATH) {
-    return check_path(&arguments);
-  }
-  return check_batch(&arguments);
+  const int status = arguments.command == CLI_CHECK_PATH ? check_path(&arguments)
+                                                         : check_batch(&arguments);
+  destroy_arguments(&arguments);
+  return status;
 }

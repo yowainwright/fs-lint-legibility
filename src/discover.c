@@ -55,8 +55,7 @@ static char *reject_conflict(char *found, char *candidate, char *error,
 
 static char *find_in_directory(const char *directory, char *error, size_t error_size) {
   const char *names[] = {
-      ".legibilityrc",     ".legibilityrc.json", ".legibilityrc.yaml",
-      ".legibilityrc.yml", ".legibilityrc.toml",
+      ".fs-lintrc", "fs-lint.json", "fs-lint.toml", "fs-lint.yaml", "fs-lint.yml",
   };
   const size_t name_count = sizeof(names) / sizeof(names[0]);
   char *found = NULL;

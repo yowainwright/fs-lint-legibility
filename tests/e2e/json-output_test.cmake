@@ -3,7 +3,7 @@ file(MAKE_DIRECTORY "${TEST_ROOT}")
 file(REAL_PATH "${TEST_ROOT}" canonical_root)
 file(
   WRITE
-  "${TEST_ROOT}/.legibilityrc.json"
+  "${TEST_ROOT}/fs-lint.json"
   "{\"version\":1,\"newFiles\":{\"default\":\"deny\"}}"
 )
 
@@ -38,7 +38,7 @@ endif()
 
 file(
   WRITE
-  "${TEST_ROOT}/.legibilityrc.json"
+  "${TEST_ROOT}/fs-lint.json"
   "{\"version\":2,\"newFiles\":{}}"
 )
 
@@ -55,7 +55,7 @@ string(
   expected_config_output
   "{\"severity\":\"error\","
   "\"code\":\"config/invalid\","
-  "\"path\":\"${canonical_root}/.legibilityrc.json\","
+  "\"path\":\"${canonical_root}/fs-lint.json\","
   "\"message\":\"version must be 1\"}\n"
 )
 

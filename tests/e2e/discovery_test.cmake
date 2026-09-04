@@ -3,7 +3,7 @@ file(MAKE_DIRECTORY "${TEST_ROOT}/.git")
 file(MAKE_DIRECTORY "${TEST_ROOT}/packages/widget")
 file(
   WRITE
-  "${TEST_ROOT}/.legibilityrc"
+  "${TEST_ROOT}/.fs-lintrc"
   "{\"version\":1,\"newFiles\":{\"default\":\"deny\"}}"
 )
 
@@ -21,8 +21,8 @@ endif()
 
 set(conflict_root "${TEST_ROOT}/conflict")
 file(MAKE_DIRECTORY "${conflict_root}")
-file(WRITE "${conflict_root}/.legibilityrc" "{\"version\":1,\"newFiles\":{\"default\":\"deny\"}}")
-file(WRITE "${conflict_root}/.legibilityrc.json" "{\"version\":1,\"newFiles\":{\"default\":\"deny\"}}")
+file(WRITE "${conflict_root}/.fs-lintrc" "{\"version\":1,\"newFiles\":{\"default\":\"deny\"}}")
+file(WRITE "${conflict_root}/fs-lint.json" "{\"version\":1,\"newFiles\":{\"default\":\"deny\"}}")
 
 execute_process(
   COMMAND "${FS_LINT}" check-path src/new-helper.c

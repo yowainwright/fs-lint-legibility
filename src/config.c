@@ -1,6 +1,7 @@
 #include "config.h"
 
 #include "discover.h"
+#include "tomlc17.h"
 #include "yyjson.h"
 
 #include <stdio.h>
@@ -54,20 +55,19 @@ static const char *base_name(const char *path) {
 }
 
 static const char *format_error(const char *path) {
-  if (has_suffix(path, ".toml")) {
-    return "TOML configuration reader is not available yet";
-  }
   const bool yaml = has_suffix(path, ".yaml") || has_suffix(path, ".yml");
   if (yaml) {
     return "YAML configuration reader is not available yet";
   }
-  const bool json =
-      has_suffix(path, ".json") || strcmp(base_name(path), ".legibilityrc") == 0;
-  if (!json) {
-    return "configuration must use .legibilityrc or a supported extension";
+  const bool supported = has_suffix(path, ".json") || has_suffix(path, ".toml") ||
+                         strcmp(base_name(path), ".fs-lintrc") == 0;
+  if (!supported) {
+    return "configuration must use .fs-lintrc, fs-lint.json, or fs-lint.toml";
   }
   return NULL;
 }
+
+static bool is_toml_path(const char *path) { return has_suffix(path, ".toml"); }
 
 static bool fail(cli_config *config, const char *message) {
   snprintf(config->error, sizeof(config->error), "%s", message);
@@ -173,6 +173,10 @@ static bool has_embedded_nul(yyjson_val *value) {
   return string != NULL && memchr(string, '\0', length) != NULL;
 }
 
+static bool has_embedded_nul_bytes(const char *value, size_t length) {
+  return value != NULL && memchr(value, '\0', length) != NULL;
+}
+
 static bool validate_keys(yyjson_val *object, expected_key *keys, size_t key_count,
                           cli_config *config) {
   size_t index;
@@ -240,6 +244,33 @@ static bool allocate_patterns(size_t count, cli_config *config) {
   }
   config->policy.allow_patterns = (const char *const *)config->owned_allow_patterns;
   config->policy.allow_pattern_count = count;
+  return true;
+}
+
+static size_t current_pattern_bytes(const cli_config *config) {
+  size_t total = 0;
+  for (size_t index = 0; index < config->policy.allow_pattern_count; index += 1) {
+    total += strlen(config->owned_allow_patterns[index]);
+  }
+  return total;
+}
+
+static bool valid_extra_pattern_count(size_t current, size_t extra,
+                                      cli_config *config) {
+  if (extra > CLI_MAX_ALLOW_PATTERNS - current) {
+    return fail(config, "newFiles.allow exceeds 4096 patterns");
+  }
+  return true;
+}
+
+static bool grow_patterns(cli_config *config, size_t pattern_count) {
+  char **patterns = realloc(config->owned_allow_patterns,
+                            pattern_count * sizeof(*config->owned_allow_patterns));
+  if (patterns == NULL) {
+    return fail(config, "could not allocate allow patterns");
+  }
+  config->owned_allow_patterns = patterns;
+  config->policy.allow_patterns = (const char *const *)patterns;
   return true;
 }
 
@@ -313,7 +344,7 @@ static bool read_new_files(yyjson_val *root, cli_config *config) {
   return read_default(new_files, config) && read_allow(new_files, config);
 }
 
-static bool parse_document(yyjson_doc *document, cli_config *config) {
+static bool parse_json_document(yyjson_doc *document, cli_config *config) {
   yyjson_val *root = yyjson_doc_get_root(document);
   if (!yyjson_is_obj(root)) {
     return fail(config, "configuration must be an object");
@@ -322,6 +353,150 @@ static bool parse_document(yyjson_doc *document, cli_config *config) {
     return false;
   }
   return read_version(root, config) && read_new_files(root, config);
+}
+
+static bool validate_toml_keys(toml_datum_t table, expected_key *keys, size_t key_count,
+                               cli_config *config) {
+  if (table.type != TOML_TABLE) {
+    return fail(config, "configuration must be an object");
+  }
+  for (int32_t index = 0; index < table.u.tab.size; index += 1) {
+    const char *key = table.u.tab.key[index];
+    const int key_length = table.u.tab.len[index];
+    if (key_length < 0 || has_embedded_nul_bytes(key, (size_t)key_length)) {
+      return fail(config, "configuration key must not contain embedded NUL bytes");
+    }
+    if (!record_key(key, keys, key_count, config)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+static bool validate_toml_root_keys(toml_datum_t root, cli_config *config) {
+  expected_key keys[] = {{"version", false}, {"newFiles", false}};
+  return validate_toml_keys(root, keys, 2, config);
+}
+
+static bool validate_toml_new_file_keys(toml_datum_t new_files, cli_config *config) {
+  expected_key keys[] = {{"default", false}, {"allow", false}};
+  return validate_toml_keys(new_files, keys, 2, config);
+}
+
+static bool read_toml_version(toml_datum_t root, cli_config *config) {
+  const toml_datum_t version = toml_get(root, "version");
+  const bool supported = version.type == TOML_INT64 && version.u.int64 == 1;
+  if (!supported) {
+    return fail(config, "version must be 1");
+  }
+  return true;
+}
+
+static bool read_toml_default(toml_datum_t new_files, cli_config *config) {
+  const toml_datum_t value = toml_get(new_files, "default");
+  if (value.type == TOML_UNKNOWN) {
+    return true;
+  }
+  if (value.type != TOML_STRING ||
+      has_embedded_nul_bytes(value.u.str.ptr, (size_t)value.u.str.len)) {
+    return fail(config, "newFiles.default must be \"allow\" or \"deny\"");
+  }
+  if (strcmp(value.u.s, "deny") == 0) {
+    config->policy.new_files_default = LEGIBILITY_NEW_FILES_DENY;
+    return true;
+  }
+  if (strcmp(value.u.s, "allow") == 0) {
+    config->policy.new_files_default = LEGIBILITY_NEW_FILES_ALLOW;
+    return true;
+  }
+  return fail(config, "newFiles.default must be \"allow\" or \"deny\"");
+}
+
+static bool copy_toml_pattern(toml_datum_t value, size_t index, size_t *total,
+                              cli_config *config) {
+  if (value.type != TOML_STRING) {
+    return fail(config, "newFiles.allow must contain only strings");
+  }
+  if (has_embedded_nul_bytes(value.u.str.ptr, (size_t)value.u.str.len)) {
+    return fail(config, "newFiles.allow must not contain embedded NUL bytes");
+  }
+  if (!add_pattern_size(value.u.s, total, config)) {
+    return false;
+  }
+  config->owned_allow_patterns[index] = copy_string(value.u.s);
+  if (config->owned_allow_patterns[index] == NULL) {
+    return fail(config, "could not allocate allow pattern");
+  }
+  return true;
+}
+
+static bool read_toml_allow(toml_datum_t new_files, cli_config *config) {
+  const toml_datum_t allow = toml_get(new_files, "allow");
+  if (allow.type == TOML_UNKNOWN) {
+    return true;
+  }
+  if (allow.type != TOML_ARRAY) {
+    return fail(config, "newFiles.allow must be an array of strings");
+  }
+  if (allow.u.arr.size < 0 || (size_t)allow.u.arr.size > CLI_MAX_ALLOW_PATTERNS) {
+    return fail(config, "newFiles.allow exceeds 4096 patterns");
+  }
+  const size_t count = (size_t)allow.u.arr.size;
+  if (!allocate_patterns(count, config)) {
+    return false;
+  }
+
+  size_t total = 0;
+  for (size_t index = 0; index < count; index += 1) {
+    if (!copy_toml_pattern(allow.u.arr.elem[index], index, &total, config)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+static bool read_toml_new_files(toml_datum_t root, cli_config *config) {
+  const toml_datum_t new_files = toml_get(root, "newFiles");
+  if (new_files.type != TOML_TABLE) {
+    return fail(config, "newFiles must be an object");
+  }
+  if (!validate_toml_new_file_keys(new_files, config)) {
+    return false;
+  }
+  return read_toml_default(new_files, config) && read_toml_allow(new_files, config);
+}
+
+static bool parse_toml_document(const char *path, cli_config *config) {
+  size_t length = 0;
+  char *data = load_config_data(path, &length, config);
+  if (data == NULL) {
+    return false;
+  }
+
+  toml_result_t document = toml_parse_named(data, (int)length, path);
+  free(data);
+  if (!document.ok) {
+    const bool valid = fail(config, document.errmsg);
+    toml_free(document);
+    return valid;
+  }
+  bool valid = validate_toml_root_keys(document.toptab, config);
+  if (valid) {
+    valid = read_toml_version(document.toptab, config) &&
+            read_toml_new_files(document.toptab, config);
+  }
+  toml_free(document);
+  return valid;
+}
+
+static bool parse_json_path(const char *path, cli_config *config) {
+  yyjson_doc *document = load_document(path, config);
+  if (document == NULL) {
+    return false;
+  }
+  const bool valid = parse_json_document(document, config);
+  yyjson_doc_free(document);
+  return valid;
 }
 
 static bool handle_missing_path(const char *root, cli_config *config) {
@@ -352,13 +527,37 @@ bool cli_config_load(const char *root, const char *config_path, cli_config *conf
     return fail(config, unsupported_format);
   }
 
-  yyjson_doc *document = load_document(config->source_path, config);
-  if (document == NULL) {
+  if (is_toml_path(config->source_path)) {
+    return parse_toml_document(config->source_path, config);
+  }
+  return parse_json_path(config->source_path, config);
+}
+
+bool cli_config_append_patterns(cli_config *config, const char *const *patterns,
+                                size_t pattern_count) {
+  const size_t current = config->policy.allow_pattern_count;
+  if (pattern_count == 0) {
+    return true;
+  }
+  if (!valid_extra_pattern_count(current, pattern_count, config)) {
     return false;
   }
-  const bool valid = parse_document(document, config);
-  yyjson_doc_free(document);
-  return valid;
+  if (!grow_patterns(config, current + pattern_count)) {
+    return false;
+  }
+
+  size_t total = current_pattern_bytes(config);
+  for (size_t index = 0; index < pattern_count; index += 1) {
+    if (!add_pattern_size(patterns[index], &total, config)) {
+      return false;
+    }
+    config->owned_allow_patterns[current + index] = copy_string(patterns[index]);
+    if (config->owned_allow_patterns[current + index] == NULL) {
+      return fail(config, "could not allocate allow pattern");
+    }
+    config->policy.allow_pattern_count += 1;
+  }
+  return true;
 }
 
 void cli_config_destroy(cli_config *config) {
