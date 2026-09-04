@@ -53,12 +53,12 @@ run_pre_commit() {
 
 run_shell_checks() {
   printf 'setup: shell format check\n'
-  shfmt -d -i 2 scripts/release.sh scripts/setup.sh tests/setup_test.sh
+  shfmt -d -i 2 scripts/release.sh scripts/setup.sh tests/integration/release_test.sh tests/setup_test.sh
   printf 'setup: shellcheck\n'
-  shellcheck scripts/release.sh scripts/setup.sh tests/setup_test.sh
+  shellcheck scripts/release.sh scripts/setup.sh tests/integration/release_test.sh tests/setup_test.sh
   command -v shellcheck-legibility >/dev/null 2>&1 || return 0
   printf 'setup: shellcheck-legibility\n'
-  shellcheck-legibility check scripts/release.sh scripts/setup.sh tests/setup_test.sh
+  shellcheck-legibility check scripts/release.sh scripts/setup.sh tests/integration/release_test.sh tests/setup_test.sh
 }
 
 run_pre_push() {
