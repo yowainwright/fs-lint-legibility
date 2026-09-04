@@ -23,6 +23,9 @@ target_include_directories(yyjson PUBLIC vendor/yyjson)
 
 add_library(tomlc17 STATIC vendor/tomlc17/tomlc17.c)
 target_include_directories(tomlc17 PUBLIC vendor/tomlc17)
+if(CMAKE_C_COMPILER_ID MATCHES "Clang|GNU")
+  target_compile_options(tomlc17 PRIVATE -fno-sanitize=all)
+endif()
 
 add_library(legibility STATIC src/glob.c src/legibility.c)
 target_include_directories(

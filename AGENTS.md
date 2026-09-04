@@ -21,6 +21,15 @@
 - When matching changes, cover matcher tests, README-rule e2e, and full `ctest`.
 - Slow is smooth, smooth is fast.
 
+## Vendor Policy
+
+- Treat files under `vendor/` as read-only third-party source by default.
+- Do not edit vendored source unless the user explicitly approves the patch.
+- Prefer upstream updates, build-system isolation, or replacing the dependency
+  over carrying private vendor patches.
+- If a vendor patch is approved, document why it exists and how it will be
+  removed or upstreamed.
+
 Reference behavior:
 
 - https://jestjs.io/docs/configuration#testmatch-arraystring
