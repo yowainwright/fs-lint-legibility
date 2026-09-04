@@ -7,7 +7,7 @@
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./.github/CONTRIBUTING.md)
 
-`fs-lint` enforces your project's file and folder structure. It checks proposed
+`fs-lint` lints your project's file and folder structure. It checks proposed
 paths against glob rules in your config.
 
 Use it in agent lifecycle hooks to stop one-off files before they enter the
@@ -37,47 +37,43 @@ Start with a small config:
 }
 ```
 
-That config allows common module files:
+fs-lint will then allow or error based your configuration/
 
-```sh
-fs-lint check-path src/auth/utils.ts
-```
-
-It blocks one-off file names:
-
-```sh
-fs-lint check-path src/auth/helper.ts
+```diff
+  src/
+    auth/
++     index.ts
++     utils.ts
+-     helper.ts
+-     schema.generated.ts
+    auth-utils/
+-     index.ts
 ```
 
 ```text
 src/auth/helper.ts: error files/new: new file is not allowed by configuration
 ```
 
-It blocks one-off folder names:
-
-```sh
-fs-lint check-path src/auth-utils/index.ts
-```
-
-```text
-src/auth-utils/index.ts: error files/new: new file is not allowed by configuration
-```
-
-It blocks file types you did not allow:
-
-```sh
-fs-lint check-path src/auth/index.js
-```
-
-```text
-src/auth/index.js: error files/new: new file is not allowed by configuration
-```
-
-Use CLI patterns for one run:
+Use CLI patterns to test one run without changing config:
 
 ```sh
 fs-lint check-path src/auth/helper.ts --allow "src/**/helper.ts"
+```
+
+```diff
+  src/
+    auth/
++     helper.ts
+```
+
+```sh
 fs-lint check-path src/auth/schema.generated.ts --deny "src/**/*.generated.ts"
+```
+
+```diff
+  src/
+    auth/
+-     schema.generated.ts
 ```
 
 CLI patterns are appended after config patterns, in the order provided.
@@ -219,6 +215,13 @@ legibility_status status =
 Configuration parsing, Git integration, and agent hooks stay outside the core
 library.
 
+## Roadmap
+
+- Agent integrations that pass proposed file paths before files are written.
+- Clearer reports for added files, rename destinations, and ignored changes.
+- More examples for standard glob allowlists and ordered `!` denials.
+- Release and Homebrew automation that stays reproducible from a version tag.
+
 ## Development
 
 ```sh
@@ -248,5 +251,6 @@ binary assets also include Sigstore attestations.
 
 ## License
 
-MIT. See [LICENSE](./LICENSE). Release archives also include the bundled yyjson
-and tomlc17 MIT licenses.
+MIT. See [LICENSE](./LICENSE). Release archives also include the bundled
+[yyjson](https://github.com/ibireme/yyjson) and
+[tomlc17](https://github.com/cktan/tomlc17) MIT licenses.
